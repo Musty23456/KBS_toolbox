@@ -1,0 +1,55 @@
+name: Web Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-build.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/**"
+      - ".github/workflows/web-build.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build web dashboard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          # No cache-dependency-path is set here since this repository does
+          # not commit a package-lock.json (generated in an environment with
+          # no network access to run `npm install`) — actions/setup-node's
+          # npm cache requires that lockfile to exist or the step fails.
+          # Run `npm install` locally once, commit the resulting
+          # package-lock.json, and add `cache: npm` back for faster CI runs.
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type-check
+        run: npx tsc -b --pretty
+
+      - name: Build production bundle
+        env:
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL || 'https://api.example.com' }}
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kbs-toolbox-web-dist
+          path: web/dist
+          if-no-files-found: error

@@ -1,0 +1,36 @@
+# --- Backend (Python) ---
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/.env
+backend/*.db
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+
+# --- Web (Node) ---
+web/node_modules/
+web/dist/
+web/.env
+web/.env.local
+web/*.log
+
+# --- Android ---
+android/*.iml
+android/.gradle/
+android/local.properties
+android/.idea/
+android/*/build/
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+android/*.apk
+android/*.aab
+android/app/release.keystore
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+*.swp

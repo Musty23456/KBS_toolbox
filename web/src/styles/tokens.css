@@ -1,0 +1,32 @@
+:root {
+  /* Color — "field registry" palette */
+  --ink: #16212b;
+  --ink-soft: #3a4954;
+  --paper: #eff2ed;
+  --paper-raised: #ffffff;
+  --hairline: #d8ddd5;
+  --hairline-strong: #b9c1b6;
+  --field-green: #2f6f4f;
+  --field-green-dark: #234f39;
+  --ochre: #c97a2b;
+  --brick: #b3492f;
+  --muted: #6b7a72;
+
+  /* Type */
+  --font-display: "Fraunces", "Iowan Old Style", serif;
+  --font-body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 3px;
+  --radius-md: 5px;
+}

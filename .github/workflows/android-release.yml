@@ -1,0 +1,88 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    name: Build and publish release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # See android-build.yml for why the third-party setup-android action
+      # was replaced with direct sdkmanager calls against the runner's
+      # preinstalled SDK.
+      - name: Accept Android SDK licenses and install required packages
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.7"
+
+      # Optional real signing: set these repository secrets to sign a proper
+      # release build. If RELEASE_KEYSTORE_BASE64 is not set, the build falls
+      # back to debug signing automatically (see app/build.gradle.kts) and
+      # still produces an installable APK for this workflow.
+      #
+      # Note: the `secrets` context cannot be referenced directly inside a
+      # step's `if:` condition — GitHub Actions rejects that at parse time
+      # ("Unrecognized named-value: 'secrets'"). The condition is evaluated
+      # in the shell instead, with the secret passed in via `env:`.
+      - name: Decode release keystore (if configured)
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          fi
+
+      - name: Run unit tests
+        working-directory: android
+        run: gradle testReleaseUnitTest --stacktrace
+
+      - name: Build release APK
+        working-directory: android
+        env:
+          HAS_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        run: |
+          if [ "$HAS_KEYSTORE" = "true" ]; then
+            gradle assembleRelease --stacktrace \
+              -PapiBaseUrl="${{ vars.API_BASE_URL || 'https://api.example.com' }}" \
+              -PreleaseKeystorePath="app/release.keystore" \
+              -PreleaseKeystorePassword="${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+              -PreleaseKeyAlias="${{ secrets.RELEASE_KEY_ALIAS }}" \
+              -PreleaseKeyPassword="${{ secrets.RELEASE_KEY_PASSWORD }}"
+          else
+            gradle assembleRelease --stacktrace \
+              -PapiBaseUrl="${{ vars.API_BASE_URL || 'https://api.example.com' }}"
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kbs-toolbox-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
