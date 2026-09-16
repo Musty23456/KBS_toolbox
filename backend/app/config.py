@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
 
     SEED_DEMO_DATA: bool = True
-    DEMO_ADMIN_EMAIL: str = "admin@kbstoolbox.local"
+    DEMO_ADMIN_EMAIL: str = "admin@kbstoolbox.app"
     DEMO_ADMIN_PASSWORD: str = "ChangeMe123!"
 
     @property
