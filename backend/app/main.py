@@ -58,10 +58,20 @@ app.include_router(sync.router)
 @app.on_event("startup")
 def on_startup():
     # In production, schema changes should go through Alembic migrations
-    # (see alembic/). create_all is safe here because it never alters or
-    # drops existing tables — it only creates missing ones, which keeps
+    # (see alembic/). create_all is safe here because it only creates
+    # missing tables — it never alters or drops existing ones — which keeps
     # first-run/local/dev/test setup simple.
     Base.metadata.create_all(bind=engine)
+
+    # SEED_DEMO_DATA=true creates the demo admin/supervisor/enumerator
+    # accounts and three example published surveys, so a fresh deployment
+    # has something to sign in with and test against immediately. Seeding
+    # is idempotent (it skips any user/survey that already exists by
+    # email/title), so it's safe to leave this flag on.
+    if settings.SEED_DEMO_DATA:
+        from app.seed import run as run_seed
+
+        run_seed()
 
 
 @app.get("/", tags=["health"])
