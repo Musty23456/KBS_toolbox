@@ -67,7 +67,7 @@ export function LoginPage() {
         </form>
 
         <div className="login-demo-hint">
-          Demo administrator: admin@kbstoolbox.local / ChangeMe123!
+          Demo administrator: admin@kbstoolbox.app / ChangeMe123!
           <br />
           (Set up by running the backend's seed script.)
         </div>
