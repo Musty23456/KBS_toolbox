@@ -1,3 +1,4 @@
+
 """
 Seeds demo data so the platform can be tried out immediately:
 - One user per role (administrator, supervisor, enumerator)
@@ -218,8 +219,8 @@ def run():
     try:
         admin = _get_or_create_user(db, "System Administrator", settings.DEMO_ADMIN_EMAIL,
                                      settings.DEMO_ADMIN_PASSWORD, RoleName.ADMINISTRATOR)
-        _get_or_create_user(db, "Demo Supervisor", "supervisor@kbstoolbox.local", "ChangeMe123!", RoleName.SUPERVISOR)
-        _get_or_create_user(db, "Demo Enumerator", "enumerator@kbstoolbox.local", "ChangeMe123!", RoleName.ENUMERATOR)
+        _get_or_create_user(db, "Demo Supervisor", "supervisor@kbstoolbox.app", "ChangeMe123!", RoleName.SUPERVISOR)
+        _get_or_create_user(db, "Demo Enumerator", "enumerator@kbstoolbox.app", "ChangeMe123!", RoleName.ENUMERATOR)
         db.commit()
 
         seed_locations(db)
@@ -229,8 +230,8 @@ def run():
 
         print("Seed complete.")
         print(f"  Admin login:      {settings.DEMO_ADMIN_EMAIL} / {settings.DEMO_ADMIN_PASSWORD}")
-        print("  Supervisor login: supervisor@kbstoolbox.local / ChangeMe123!")
-        print("  Enumerator login: enumerator@kbstoolbox.local / ChangeMe123!")
+        print("  Supervisor login: supervisor@kbstoolbox.app / ChangeMe123!")
+        print("  Enumerator login: enumerator@kbstoolbox.app / ChangeMe123!")
     finally:
         db.close()
 
