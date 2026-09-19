@@ -77,6 +77,7 @@ export interface SurveySummary {
   created_at: string;
   current_version_number: number | null;
   current_version_id: string | null;
+  assigned_enumerator_ids: string[];
 }
 
 export interface SurveyDetail extends SurveySummary {
