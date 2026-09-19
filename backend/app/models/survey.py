@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, Enum, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -11,6 +11,17 @@ class SurveyStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     PUBLISHED = "PUBLISHED"
     ARCHIVED = "ARCHIVED"
+
+
+# Many-to-many: which enumerators a survey has been restricted to. An empty
+# assignment list means "open to every enumerator" (the historical default
+# behaviour), so this table only needs a row per explicit assignment.
+survey_assignments = Table(
+    "survey_assignments",
+    Base.metadata,
+    Column("survey_id", String(36), ForeignKey("surveys.id"), primary_key=True),
+    Column("user_id", String(36), ForeignKey("users.id"), primary_key=True),
+)
 
 
 class Survey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -25,6 +36,7 @@ class Survey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         "SurveyVersion", back_populates="survey", order_by="SurveyVersion.version_number", cascade="all, delete-orphan"
     )
     submissions = relationship("Submission", back_populates="survey")
+    assigned_enumerators = relationship("User", secondary=survey_assignments)
 
 
 class SurveyVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
