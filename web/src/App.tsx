@@ -9,6 +9,7 @@ import { SurveyBuilderPage } from "./pages/surveys/SurveyBuilderPage";
 import { SubmissionsPage } from "./pages/submissions/SubmissionsPage";
 import { UsersPage } from "./pages/users/UsersPage";
 import { AnalyticsPage } from "./pages/analytics/AnalyticsPage";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -48,8 +49,6 @@ export default function App() {
                 <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
                   <AnalyticsPage />
                 </ProtectedRoute>
-              }
-            />
               }
             />
             <Route
