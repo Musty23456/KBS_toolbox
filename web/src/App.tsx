@@ -43,6 +43,16 @@ export default function App() {
               }
             />
             <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
+                  <AnalyticsPage />
+                </ProtectedRoute>
+              }
+            />
+              }
+            />
+            <Route
               path="/users"
               element={
                 <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
