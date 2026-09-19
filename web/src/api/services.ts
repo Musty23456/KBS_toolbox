@@ -31,13 +31,18 @@ export const surveysApi = {
     const { data } = await apiClient.get(`/api/surveys/${id}`);
     return data;
   },
-  async create(payload: { title: string; description?: string; questions: any[] }): Promise<SurveyDetail> {
+  async create(payload: {
+    title: string;
+    description?: string;
+    questions: any[];
+    assigned_enumerator_ids?: string[];
+  }): Promise<SurveyDetail> {
     const { data } = await apiClient.post("/api/surveys", payload);
     return data;
   },
   async update(
     id: string,
-    payload: { title?: string; description?: string; questions?: any[] }
+    payload: { title?: string; description?: string; questions?: any[]; assigned_enumerator_ids?: string[] }
   ): Promise<SurveyDetail> {
     const { data } = await apiClient.put(`/api/surveys/${id}`, payload);
     return data;
