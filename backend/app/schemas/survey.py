@@ -63,12 +63,16 @@ class SurveyCreate(BaseModel):
     title: str = Field(max_length=255)
     description: str | None = None
     questions: list[QuestionIn] = []
+    assigned_enumerator_ids: list[str] = []
 
 
 class SurveyUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     description: str | None = None
     questions: list[QuestionIn] | None = None
+    # None = leave assignments unchanged. [] = explicitly open to every
+    # enumerator. A non-empty list = restrict to just those enumerator ids.
+    assigned_enumerator_ids: list[str] | None = None
 
 
 class SurveySummaryOut(BaseModel):
@@ -81,6 +85,7 @@ class SurveySummaryOut(BaseModel):
     created_at: datetime
     current_version_number: int | None = None
     current_version_id: str | None = None
+    assigned_enumerator_ids: list[str] = []
 
 
 class SurveyDetailOut(SurveySummaryOut):
