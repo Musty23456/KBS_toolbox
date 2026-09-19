@@ -8,7 +8,7 @@ import { SurveyListPage } from "./pages/surveys/SurveyListPage";
 import { SurveyBuilderPage } from "./pages/surveys/SurveyBuilderPage";
 import { SubmissionsPage } from "./pages/submissions/SubmissionsPage";
 import { UsersPage } from "./pages/users/UsersPage";
-
+import { AnalyticsPage } from "./pages/analytics/AnalyticsPage";
 export default function App() {
   return (
     <BrowserRouter>
