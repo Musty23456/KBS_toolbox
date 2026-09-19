@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { surveysApi } from "../../api/services";
-import type { Question, SurveyDetail } from "../../api/types";
+import { surveysApi, usersApi } from "../../api/services";
+import type { Question, SurveyDetail, UserAccount } from "../../api/types";
 import { QuestionEditor } from "../../components/QuestionEditor";
 import { extractErrorMessage } from "../../api/client";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -29,9 +29,19 @@ export function SurveyBuilderPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [enumerators, setEnumerators] = useState<UserAccount[]>([]);
+  const [assignedIds, setAssignedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(!isNew);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canEdit) return;
+    usersApi
+      .list()
+      .then((all) => setEnumerators(all.filter((u) => u.role === "ENUMERATOR" && u.is_active)))
+      .catch(() => setEnumerators([]));
+  }, [canEdit]);
 
   useEffect(() => {
     if (isNew) return;
@@ -41,6 +51,7 @@ export function SurveyBuilderPage() {
       setTitle(data.title);
       setDescription(data.description ?? "");
       setQuestions(data.questions.length > 0 ? data.questions : [blankQuestion(1)]);
+      setAssignedIds(data.assigned_enumerator_ids ?? []);
       setIsLoading(false);
     })();
   }, [surveyId, isNew]);
@@ -50,6 +61,10 @@ export function SurveyBuilderPage() {
       setQuestions([blankQuestion(1)]);
     }
   }, [isNew, questions.length]);
+
+  function toggleEnumerator(id: string) {
+    setAssignedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   function updateQuestion(index: number, next: Question) {
     setQuestions((prev) => prev.map((q, i) => (i === index ? next : q)));
@@ -99,12 +114,23 @@ export function SurveyBuilderPage() {
 
     try {
       if (isNew) {
-        const created = await surveysApi.create({ title, description, questions: orderedQuestions });
+        const created = await surveysApi.create({
+          title,
+          description,
+          questions: orderedQuestions,
+          assigned_enumerator_ids: assignedIds,
+        });
         navigate(`/surveys/${created.id}`);
       } else {
-        const updated = await surveysApi.update(surveyId!, { title, description, questions: orderedQuestions });
+        const updated = await surveysApi.update(surveyId!, {
+          title,
+          description,
+          questions: orderedQuestions,
+          assigned_enumerator_ids: assignedIds,
+        });
         setSurvey(updated);
         setQuestions(updated.questions);
+        setAssignedIds(updated.assigned_enumerator_ids ?? []);
       }
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -198,6 +224,26 @@ export function SurveyBuilderPage() {
           <label>Description (optional)</label>
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 24 }}>
+        <label style={{ display: "block", marginBottom: 8 }}>Who can collect this survey</label>
+        <p style={{ marginTop: 0, color: "var(--muted, #6b7280)" }}>
+          Leave everyone unchecked to keep this survey open to every enumerator. Check specific people to restrict it
+          to only them.
+        </p>
+        {enumerators.length === 0 ? (
+          <p className="loading-text">No enumerator accounts yet.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {enumerators.map((u) => (
+              <label key={u.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" checked={assignedIds.includes(u.id)} onChange={() => toggleEnumerator(u.id)} />
+                {u.full_name} <span style={{ color: "var(--muted, #6b7280)" }}>({u.email})</span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       <h2>Questions</h2>
