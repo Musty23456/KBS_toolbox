@@ -26,6 +26,11 @@ export function Layout() {
           <NavLink to="/submissions" className={({ isActive }) => (isActive ? "active" : "")}>
             Submissions
           </NavLink>
+          {canManageSurveys && (
+            <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}>
+              Analytics
+            </NavLink>
+          )}
           {canManageUsers && (
             <NavLink to="/users" className={({ isActive }) => (isActive ? "active" : "")}>
               Enumerators &amp; staff
