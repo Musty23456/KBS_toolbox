@@ -35,6 +35,7 @@ def _to_detail(survey: Survey) -> SurveyDetailOut:
         current_version_number=version.version_number if version else None,
         current_version_id=version.id if version else None,
         questions=version.questions if version else [],
+        assigned_enumerator_ids=[u.id for u in survey.assigned_enumerators],
     )
 
 
@@ -48,19 +49,31 @@ def _to_summary(survey: Survey) -> SurveySummaryOut:
         created_at=survey.created_at,
         current_version_number=version.version_number if version else None,
         current_version_id=version.id if version else None,
+        assigned_enumerator_ids=[u.id for u in survey.assigned_enumerators],
     )
 
 
 def _load_survey_or_404(db: Session, survey_id: str) -> Survey:
     survey = (
         db.query(Survey)
-        .options(joinedload(Survey.versions).joinedload(SurveyVersion.questions).joinedload(Question.choices))
+        .options(
+            joinedload(Survey.versions).joinedload(SurveyVersion.questions).joinedload(Question.choices),
+            joinedload(Survey.assigned_enumerators),
+        )
         .filter(Survey.id == survey_id)
         .first()
     )
     if not survey:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey not found")
     return survey
+
+
+def _apply_assignments(db: Session, survey: Survey, enumerator_ids: list[str]) -> None:
+    if enumerator_ids:
+        users = db.query(User).filter(User.id.in_(enumerator_ids)).all()
+        survey.assigned_enumerators = users
+    else:
+        survey.assigned_enumerators = []
 
 
 def _write_version_questions(db: Session, version: SurveyVersion, questions_in) -> None:
@@ -103,10 +116,21 @@ def list_surveys(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Survey).options(joinedload(Survey.versions))
+    query = db.query(Survey).options(joinedload(Survey.versions), joinedload(Survey.assigned_enumerators))
     if status_filter:
         query = query.filter(Survey.status == status_filter)
     surveys = query.order_by(Survey.created_at.desc()).all()
+
+    if current_user.role == RoleName.ENUMERATOR:
+        # An unassigned survey (no one restricted it) stays open to every
+        # enumerator; an assigned survey only shows for the enumerators
+        # picked for it.
+        surveys = [
+            s
+            for s in surveys
+            if not s.assigned_enumerators or current_user.id in {u.id for u in s.assigned_enumerators}
+        ]
+
     return [_to_summary(s) for s in surveys]
 
 
@@ -125,6 +149,8 @@ def create_survey(
     survey = Survey(title=payload.title, description=payload.description, created_by_id=current_user.id)
     db.add(survey)
     db.flush()
+
+    _apply_assignments(db, survey, payload.assigned_enumerator_ids)
 
     version = SurveyVersion(survey_id=survey.id, version_number=1, is_current=True)
     db.add(version)
@@ -157,6 +183,9 @@ def update_survey(
         survey.title = payload.title
     if payload.description is not None:
         survey.description = payload.description
+
+    if payload.assigned_enumerator_ids is not None:
+        _apply_assignments(db, survey, payload.assigned_enumerator_ids)
 
     if payload.questions is not None:
         current = _current_version(survey)
