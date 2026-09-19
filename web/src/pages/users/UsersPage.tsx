@@ -24,11 +24,16 @@ export function UsersPage() {
 
   async function reload() {
     setIsLoading(true);
-    const data = await usersApi.list();
-    setUsers(data);
-    setIsLoading(false);
+    setError(null);
+    try {
+      const data = await usersApi.list();
+      setUsers(data);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
   }
-
   useEffect(() => {
     reload();
   }, []);
