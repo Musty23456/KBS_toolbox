@@ -3,6 +3,7 @@ from collections import defaultdict, deque
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
@@ -17,14 +18,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # --- Minimal in-process rate limiting (per client IP, sliding 60s window) ---
 # For multi-instance production deployments, replace this with a shared store
 # (e.g. Redis) behind the same interface; this in-memory version is sufficient
@@ -32,8 +25,12 @@ app.add_middleware(
 _request_log: dict[str, deque] = defaultdict(deque)
 
 
-@app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
+    # Never rate-limit CORS preflight requests — browsers send these
+    # automatically and blocking them breaks cross-origin requests entirely.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     window = _request_log[client_ip]
@@ -47,6 +44,20 @@ async def rate_limit_middleware(request: Request, call_next):
     window.append(now)
     return await call_next(request)
 
+
+# Order matters: middleware added last runs first (outermost). We add the
+# rate limiter first and CORS last, so CORS ends up outermost and its
+# headers are attached even to responses the rate limiter short-circuits
+# (like a 429) — otherwise the browser reports those as generic network
+# errors instead of showing the real status.
+app.add_middleware(BaseHTTPMiddleware, dispatch=rate_limit_middleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router)
 app.include_router(users.router)
