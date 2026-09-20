@@ -44,6 +44,8 @@ export default function App() {
             />
             <Route path="/surveys/:surveyId" element={<SurveyBuilderPage />} />
             <Route path="/surveys/:surveyId/fill" element={<FillSurveyPage />} />
+            <Route path="/map" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><MapPage /></ProtectedRoute>} />
+            <Route path="/exports" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><ExportPage /></ProtectedRoute>} />
             <Route path="/exports" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><ExportPage /></ProtectedRoute>} />
             <Route path="/translations" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><TranslationsPage /></ProtectedRoute>} />
             <Route
