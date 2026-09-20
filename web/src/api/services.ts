@@ -67,6 +67,10 @@ export const surveysApi = {
 };
 
 export const submissionsApi = {
+  async review(id: string, payload: { status: string; comment?: string }) {
+    const { data } = await apiClient.post(`/api/submissions/${id}/review`, payload);
+    return data;
+  },
   async create(payload: {
     client_submission_uuid: string;
     survey_id: string;
@@ -127,7 +131,7 @@ export const exportsApi = {
       params: filters,
       responseType: "blob",
     });
-    const contentType = response.headers["content-type"] || "application/octet-stream";
+    const contentType = String(response.headers["content-type"] || "application/octet-stream");
     const blob = new Blob([response.data], { type: contentType });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
