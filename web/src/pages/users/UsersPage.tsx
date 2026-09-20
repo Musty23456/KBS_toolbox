@@ -34,6 +34,7 @@ export function UsersPage() {
       setIsLoading(false);
     }
   }
+
   useEffect(() => {
     reload();
   }, []);

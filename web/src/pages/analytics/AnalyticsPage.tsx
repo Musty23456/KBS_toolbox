@@ -1,250 +1,103 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { submissionsApi, surveysApi, usersApi } from "../../api/services";
-import type { Submission, SurveyDetail, SurveySummary, UserAccount } from "../../api/types";
-import { CHOICE_TYPES } from "../../api/types";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { analyticsApi, surveysApi } from "../../api/services";
+import type { SurveySummary } from "../../api/types";
 
 const CHART_COLORS = ["#2f6f4f", "#c98a2c", "#4d7ea8", "#a8474d", "#7a5ea8", "#3f9c8a", "#c2703f"];
 
-function dateKey(iso: string | null): string {
-  if (!iso) return "Unknown date";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "Unknown date";
-  return d.toISOString().slice(0, 10);
-}
+type AnalyticsOverview = {
+  total_submissions: number;
+  synced_submissions: number;
+  failed_submissions: number;
+  unique_enumerators: number;
+  active_days: number;
+  submissions_over_time: { date: string; count: number }[];
+  status_distribution: { name: string; value: number }[];
+  review_distribution: { name: string; value: number }[];
+  enumerator_performance: { user_id: string; name: string; submissions: number }[];
+  survey_comparison: { survey_id: string; title: string; submissions: number }[];
+};
+
+type QuestionStat = {
+  question_id: string;
+  code: string;
+  label: string;
+  type: string;
+  response_count: number;
+  missing_count: number;
+  distribution: { name: string; value: number }[];
+};
 
 export function AnalyticsPage() {
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
-  const [selectedSurveyId, setSelectedSurveyId] = useState<string>("");
-  const [surveyDetail, setSurveyDetail] = useState<SurveyDetail | null>(null);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [users, setUsers] = useState<UserAccount[]>([]);
-  const [selectedQuestionId, setSelectedQuestionId] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedSurveyId, setSelectedSurveyId] = useState("");
+  const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [questions, setQuestions] = useState<QuestionStat[]>([]);
+  const [selectedQuestionId, setSelectedQuestionId] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      const [surveyList, userList] = await Promise.all([surveysApi.list(), usersApi.list().catch(() => [])]);
-      setSurveys(surveyList);
-      setUsers(userList);
-      if (surveyList.length > 0) {
-        setSelectedSurveyId(surveyList[0].id);
-      } else {
-        setIsLoading(false);
-      }
-    })();
+    surveysApi.list().then((items) => {
+      setSurveys(items);
+      setSelectedSurveyId(items[0]?.id ?? "");
+      if (!items.length) setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
     if (!selectedSurveyId) return;
-    setIsLoading(true);
-    setSelectedQuestionId("");
-    (async () => {
-      const [detail, subs] = await Promise.all([
-        surveysApi.get(selectedSurveyId),
-        submissionsApi.list({ survey_id: selectedSurveyId }),
-      ]);
-      setSurveyDetail(detail);
-      setSubmissions(subs);
-      const firstChoiceQuestion = detail.questions.find((q) => CHOICE_TYPES.includes(q.type));
-      if (firstChoiceQuestion) setSelectedQuestionId(firstChoiceQuestion.id ?? "");
-      setIsLoading(false);
-    })();
-  }, [selectedSurveyId]);
+    setLoading(true);
+    Promise.all([
+      analyticsApi.overview({ survey_id: selectedSurveyId, date_from: dateFrom || undefined, date_to: dateTo || undefined }),
+      analyticsApi.questions(selectedSurveyId),
+    ]).then(([o, q]) => {
+      setOverview(o);
+      setQuestions(q);
+      setSelectedQuestionId(q[0]?.question_id ?? "");
+    }).finally(() => setLoading(false));
+  }, [selectedSurveyId, dateFrom, dateTo]);
 
-  const userNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    users.forEach((u) => map.set(u.id, u.full_name));
-    return map;
-  }, [users]);
+  const selectedQuestion = useMemo(() => questions.find((q) => q.question_id === selectedQuestionId), [questions, selectedQuestionId]);
 
-  const submissionsByDate = useMemo(() => {
-    const counts = new Map<string, number>();
-    submissions.forEach((s) => {
-      const key = dateKey(s.collected_at ?? s.created_at);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, count]) => ({ date, count }));
-  }, [submissions]);
-
-  const submissionsByEnumerator = useMemo(() => {
-    const counts = new Map<string, number>();
-    submissions.forEach((s) => {
-      const name = userNameById.get(s.submitted_by_id) ?? "Unknown";
-      counts.set(name, (counts.get(name) ?? 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, count }));
-  }, [submissions, userNameById]);
-
-  const choiceQuestions = useMemo(
-    () => (surveyDetail?.questions ?? []).filter((q) => CHOICE_TYPES.includes(q.type)),
-    [surveyDetail]
-  );
-
-  const selectedQuestion = choiceQuestions.find((q) => q.id === selectedQuestionId);
-
-  const answerDistribution = useMemo(() => {
-    if (!selectedQuestion) return [];
-    const labelByValue = new Map<string, string>();
-    selectedQuestion.choices.forEach((c) => labelByValue.set(c.value, c.label));
-    const counts = new Map<string, number>();
-    submissions.forEach((s) => {
-      const answer = s.answers.find((a) => a.question_id === selectedQuestion.id);
-      if (!answer?.value_text) return;
-      // MULTIPLE_CHOICE answers are stored as a JSON array string; everything
-      // else (single choice / dropdown) is a plain value string.
-      let values: string[];
-      try {
-        const parsed = JSON.parse(answer.value_text);
-        values = Array.isArray(parsed) ? parsed : [answer.value_text];
-      } catch {
-        values = [answer.value_text];
-      }
-      values.forEach((v) => {
-        const label = labelByValue.get(v) ?? v;
-        counts.set(label, (counts.get(label) ?? 0) + 1);
-      });
-    });
-    return Array.from(counts.entries()).map(([label, count]) => ({ name: label, value: count }));
-  }, [selectedQuestion, submissions]);
-
-  const syncedCount = submissions.filter((s) => s.status === "SYNCED" || s.status === "UPLOADED").length;
-  const uniqueEnumerators = new Set(submissions.map((s) => s.submitted_by_id)).size;
+  if (!surveys.length && !loading) return <div className="empty-state"><h3>No surveys yet</h3><p>Create a survey and collect submissions to see advanced analytics.</p></div>;
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>Analytics</h1>
-          <p>How data collection is progressing for each survey.</p>
-        </div>
-      </div>
-
+      <div className="page-header"><div><h1>Advanced Analytics</h1><p>Measure collection progress, review workflow, enumerator activity and question responses.</p></div></div>
       <div className="toolbar">
-        <select value={selectedSurveyId} onChange={(e) => setSelectedSurveyId(e.target.value)}>
-          {surveys.length === 0 && <option value="">No surveys yet</option>}
-          {surveys.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.title}
-            </option>
-          ))}
-        </select>
+        <select value={selectedSurveyId} onChange={(e) => setSelectedSurveyId(e.target.value)}>{surveys.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}</select>
+        <label>From <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
+        <label>To <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
       </div>
-
-      {isLoading ? (
-        <p className="loading-text">Loading…</p>
-      ) : surveys.length === 0 ? (
-        <div className="empty-state">
-          <h3>No surveys yet</h3>
-          <p>Create and publish a survey to see analytics here.</p>
-        </div>
-      ) : submissions.length === 0 ? (
-        <div className="empty-state">
-          <h3>No submissions yet</h3>
-          <p>Once enumerators start submitting responses for this survey, charts will appear here.</p>
-        </div>
-      ) : (
+      {loading || !overview ? <p className="loading-text">Loading analytics…</p> : (
         <>
           <div className="stat-row">
-            <div className="stat-box">
-              <div className="stat-value">{submissions.length}</div>
-              <div className="stat-label">Total submissions</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-value">{syncedCount}</div>
-              <div className="stat-label">Synced to server</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-value">{uniqueEnumerators}</div>
-              <div className="stat-label">Enumerators who submitted</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-value">{submissionsByDate.length}</div>
-              <div className="stat-label">Days with activity</div>
-            </div>
+            <div className="stat-box"><div className="stat-value">{overview.total_submissions}</div><div className="stat-label">Total submissions</div></div>
+            <div className="stat-box"><div className="stat-value">{overview.synced_submissions}</div><div className="stat-label">Synced / uploaded</div></div>
+            <div className="stat-box"><div className="stat-value">{overview.failed_submissions}</div><div className="stat-label">Failed syncs</div></div>
+            <div className="stat-box"><div className="stat-value">{overview.unique_enumerators}</div><div className="stat-label">Active enumerators</div></div>
+            <div className="stat-box"><div className="stat-value">{overview.active_days}</div><div className="stat-label">Active days</div></div>
           </div>
 
           <h2>Submissions over time</h2>
-          <div style={{ width: "100%", height: 280, marginBottom: 40 }}>
-            <ResponsiveContainer>
-              <BarChart data={submissionsByDate}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" name="Submissions" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={{ width: "100%", height: 280, marginBottom: 40 }}><ResponsiveContainer><LineChart data={overview.submissions_over_time}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="date" /><YAxis allowDecimals={false} /><Tooltip /><Line type="monotone" dataKey="count" name="Submissions" stroke={CHART_COLORS[0]} strokeWidth={3} /></LineChart></ResponsiveContainer></div>
+
+          <div className="analytics-grid">
+            <section><h2>Submission status</h2><div style={{ width: "100%", height: 300 }}><ResponsiveContainer><PieChart><Pie data={overview.status_distribution} dataKey="value" nameKey="name" outerRadius={100} label>{overview.status_distribution.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div></section>
+            <section><h2>Review workflow</h2><div style={{ width: "100%", height: 300 }}><ResponsiveContainer><PieChart><Pie data={overview.review_distribution} dataKey="value" nameKey="name" outerRadius={100} label>{overview.review_distribution.map((_, i) => <Cell key={i} fill={CHART_COLORS[(i + 2) % CHART_COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div></section>
           </div>
 
-          <h2>Submissions by enumerator</h2>
-          <div style={{ width: "100%", height: Math.max(200, submissionsByEnumerator.length * 44), marginBottom: 40 }}>
-            <ResponsiveContainer>
-              <BarChart data={submissionsByEnumerator} layout="vertical" margin={{ left: 24 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="count" name="Submissions" fill={CHART_COLORS[1]} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <h2>Enumerator performance</h2>
+          <div style={{ width: "100%", height: Math.max(220, overview.enumerator_performance.length * 48), marginBottom: 40 }}><ResponsiveContainer><BarChart data={overview.enumerator_performance} layout="vertical" margin={{ left: 30 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="name" width={150} /><Tooltip /><Bar dataKey="submissions" name="Submissions" fill={CHART_COLORS[1]} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>
 
-          {choiceQuestions.length > 0 && (
-            <>
-              <h2>Answer distribution</h2>
-              <div className="toolbar">
-                <select value={selectedQuestionId} onChange={(e) => setSelectedQuestionId(e.target.value)}>
-                  {choiceQuestions.map((q) => (
-                    <option key={q.id} value={q.id}>
-                      {q.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {answerDistribution.length === 0 ? (
-                <p className="loading-text">No answers recorded for this question yet.</p>
-              ) : (
-                <div style={{ width: "100%", height: 320, marginBottom: 24 }}>
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie
-                        data={answerDistribution}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={110}
-                        label={(entry) => `${entry.name} (${entry.value})`}
-                      >
-                        {answerDistribution.map((_, index) => (
-                          <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Legend />
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </>
-          )}
+          <h2>Survey comparison</h2>
+          <div style={{ width: "100%", height: Math.max(220, overview.survey_comparison.length * 48), marginBottom: 40 }}><ResponsiveContainer><BarChart data={overview.survey_comparison} layout="vertical" margin={{ left: 30 }}><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" allowDecimals={false} /><YAxis type="category" dataKey="title" width={180} /><Tooltip /><Bar dataKey="submissions" name="Submissions" fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div>
+
+          <h2>Question-level statistics</h2>
+          <div className="toolbar"><select value={selectedQuestionId} onChange={(e) => setSelectedQuestionId(e.target.value)}>{questions.map((q) => <option key={q.question_id} value={q.question_id}>{q.code} — {q.label}</option>)}</select></div>
+          {selectedQuestion && <div className="analytics-grid"><section className="stat-box"><div className="stat-value">{selectedQuestion.response_count}</div><div className="stat-label">Answered</div><div className="stat-value" style={{ marginTop: 12 }}>{selectedQuestion.missing_count}</div><div className="stat-label">Missing</div></section><section><div style={{ width: "100%", height: 320 }}><ResponsiveContainer><BarChart data={selectedQuestion.distribution}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="value" name="Responses" fill={CHART_COLORS[3]} /></BarChart></ResponsiveContainer></div></section></div>}
         </>
       )}
     </div>

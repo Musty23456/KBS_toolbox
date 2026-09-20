@@ -1,23 +1,35 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { extractErrorMessage } from "../api/client";
 
-export function LoginPage() {
-  const { login } = useAuth();
+export function RegisterPage() {
+  const { register } = useAuth();
   const navigate = useNavigate();
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await login(email, password);
+      await register(fullName, email, password);
       navigate("/");
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -31,11 +43,24 @@ export function LoginPage() {
       <div className="login-panel">
         <div className="login-brand">
           KBS Toolbox
-          <small>by Musty — field survey administration</small>
+          <small>Create your enumerator account</small>
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginTop: 24 }}>
           {error && <div className="form-error">{error}</div>}
+
+          <div className="field">
+            <label htmlFor="fullName">Full name</label>
+            <input
+              id="fullName"
+              type="text"
+              required
+              minLength={2}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              autoComplete="name"
+            />
+          </div>
 
           <div className="field">
             <label htmlFor="email">Email</label>
@@ -55,24 +80,33 @@ export function LoginPage() {
               id="password"
               type="password"
               required
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
+              autoComplete="new-password"
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="confirmPassword">Confirm password</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              required
+              minLength={8}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
             />
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ width: "100%" }}>
-            {isSubmitting ? "Signing in…" : "Sign in"}
+            {isSubmitting ? "Creating account…" : "Create account"}
           </button>
         </form>
 
         <div className="login-demo-hint">
-          Demo administrator: admin@kbstoolbox.app / ChangeMe123!
-          <br />
-          (Set up by running the backend's seed script.)
-        </div>
-        <div className="login-demo-hint">
-          New enumerator? <Link to="/register">Create an account</Link>
+          Already have an account? <Link to="/login">Sign in</Link>
         </div>
       </div>
     </div>

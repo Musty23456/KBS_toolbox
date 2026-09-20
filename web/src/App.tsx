@@ -3,12 +3,19 @@ import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SurveyListPage } from "./pages/surveys/SurveyListPage";
 import { SurveyBuilderPage } from "./pages/surveys/SurveyBuilderPage";
 import { SubmissionsPage } from "./pages/submissions/SubmissionsPage";
 import { UsersPage } from "./pages/users/UsersPage";
 import { AnalyticsPage } from "./pages/analytics/AnalyticsPage";
+import { DevicesPage } from "./pages/devices/DevicesPage";
+import { MapPage } from "./pages/map/MapPage";
+import { ExportPage } from "./pages/exports/ExportPage";
+import { TranslationsPage } from "./pages/translations/TranslationsPage";
+import { AuditPage } from "./pages/audit/AuditPage";
+import { FillSurveyPage } from "./pages/surveys/FillSurveyPage";
 
 export default function App() {
   return (
@@ -16,6 +23,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
           <Route
             element={
@@ -35,6 +43,9 @@ export default function App() {
               }
             />
             <Route path="/surveys/:surveyId" element={<SurveyBuilderPage />} />
+            <Route path="/surveys/:surveyId/fill" element={<FillSurveyPage />} />
+            <Route path="/exports" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><ExportPage /></ProtectedRoute>} />
+            <Route path="/translations" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><TranslationsPage /></ProtectedRoute>} />
             <Route
               path="/submissions"
               element={
@@ -51,6 +62,15 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/devices"
+              element={
+                <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
+                  <DevicesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/audit" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><AuditPage /></ProtectedRoute>} />
             <Route
               path="/users"
               element={

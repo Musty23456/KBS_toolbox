@@ -23,12 +23,35 @@ export function Layout() {
           <NavLink to="/surveys" className={({ isActive }) => (isActive ? "active" : "")}>
             Surveys
           </NavLink>
+          <NavLink to="/map" className={({ isActive }) => (isActive ? "active" : "")}>
+            Map
+          </NavLink>
           <NavLink to="/submissions" className={({ isActive }) => (isActive ? "active" : "")}>
             Submissions
           </NavLink>
           {canManageSurveys && (
+            <NavLink to="/exports" className={({ isActive }) => (isActive ? "active" : "")}>
+              Export Center
+            </NavLink>
+          )}
+          {canManageSurveys && (
+            <NavLink to="/translations" className={({ isActive }) => (isActive ? "active" : "")}>
+              Languages
+            </NavLink>
+          )}
+          {canManageSurveys && (
             <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}>
               Analytics
+            </NavLink>
+          )}
+          {canManageUsers && (
+            <NavLink to="/devices" className={({ isActive }) => (isActive ? "active" : "")}>
+              Devices &amp; sync
+            </NavLink>
+          )}
+          {canManageUsers && (
+            <NavLink to="/audit" className={({ isActive }) => (isActive ? "active" : "")}>
+              Audit Dashboard
             </NavLink>
           )}
           {canManageUsers && (

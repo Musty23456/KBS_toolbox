@@ -86,6 +86,7 @@ export function SurveyListPage() {
               <th>Status</th>
               <th>Version</th>
               <th>Created</th>
+              <th>Fill</th>
               {canManage && <th>Actions</th>}
             </tr>
           </thead>
@@ -103,6 +104,13 @@ export function SurveyListPage() {
                 </td>
                 <td className="mono">v{survey.current_version_number ?? "—"}</td>
                 <td>{new Date(survey.created_at).toLocaleDateString()}</td>
+                <td>
+                  {survey.status === "PUBLISHED" && (
+                    <Link to={`/surveys/${survey.id}/fill`} className="btn btn-primary btn-icon">
+                      Fill
+                    </Link>
+                  )}
+                </td>
                 {canManage && (
                   <td>
                     <div style={{ display: "flex", gap: 6 }}>

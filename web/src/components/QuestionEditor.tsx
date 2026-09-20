@@ -1,3 +1,4 @@
+import type { DragEvent } from "react";
 import { CHOICE_TYPES, QUESTION_TYPE_LABELS } from "../api/types";
 import type { Choice, Question, QuestionType } from "../api/types";
 
@@ -10,11 +11,16 @@ interface Props {
   onRemove: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onDuplicate: () => void;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop?: () => void;
 }
 
 const QUESTION_TYPES = Object.keys(QUESTION_TYPE_LABELS) as QuestionType[];
 
-export function QuestionEditor({ question, index, total, otherQuestions, onChange, onRemove, onMoveUp, onMoveDown }: Props) {
+export function QuestionEditor({ question, index, total, otherQuestions, onChange, onRemove, onMoveUp, onMoveDown, onDuplicate, draggable, onDragStart, onDragOver, onDrop }: Props) {
   const isChoiceType = CHOICE_TYPES.includes(question.type);
   const isNumeric = question.type === "INTEGER" || question.type === "DECIMAL";
   const isText = question.type === "SHORT_TEXT" || question.type === "LONG_TEXT";
@@ -41,7 +47,7 @@ export function QuestionEditor({ question, index, total, otherQuestions, onChang
   }
 
   return (
-    <div className="question-card">
+    <div className="question-card" draggable={draggable} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}>
       <div className="question-card-header">
         <span className="question-number">{index + 1}</span>
         <select
@@ -67,6 +73,9 @@ export function QuestionEditor({ question, index, total, otherQuestions, onChang
             title="Move down"
           >
             ↓
+          </button>
+          <button type="button" className="btn btn-secondary btn-icon" onClick={onDuplicate} title="Duplicate question">
+            Duplicate
           </button>
           <button type="button" className="btn btn-danger btn-icon" onClick={onRemove} title="Remove question">
             Remove
@@ -198,13 +207,42 @@ export function QuestionEditor({ question, index, total, otherQuestions, onChang
         <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--muted)" }}>Skip logic &amp; advanced</summary>
         <div style={{ marginTop: 12 }}>
           <div className="field">
-            <label>Show this question only if (relevance expression)</label>
+            <label>Show this question when</label>
+            <div className="logic-builder">
+              <select id={`logic-q-${index}`} defaultValue="">
+                <option value="">Choose a question…</option>
+                {otherQuestions.map((q) => <option key={q.code} value={q.code}>{q.label || q.code}</option>)}
+              </select>
+              <select id={`logic-op-${index}`} defaultValue="==">
+                <option value="==">equals</option>
+                <option value="!=">does not equal</option>
+                <option value=">">is greater than</option>
+                <option value=">=">is greater than or equal to</option>
+                <option value="<">is less than</option>
+                <option value="<=">is less than or equal to</option>
+                <option value="contains">contains</option>
+              </select>
+              <input id={`logic-value-${index}`} placeholder="Value (e.g. FEMALE)" />
+              <button type="button" className="btn btn-secondary" onClick={() => {
+                const q = (document.getElementById(`logic-q-${index}`) as HTMLSelectElement).value;
+                const op = (document.getElementById(`logic-op-${index}`) as HTMLSelectElement).value;
+                const raw = (document.getElementById(`logic-value-${index}`) as HTMLInputElement).value.trim();
+                if (!q || !raw) return;
+                const quoted = /^-?\d+(\.\d+)?$/.test(raw) || raw === "true" || raw === "false" ? raw : `'${raw.replace(/'/g, "\\'")}'`;
+                const expr = op === "contains" ? `${q} contains '${raw.replace(/'/g, "\\'")}'` : `${q} ${op} ${quoted}`;
+                update("relevance_expression", expr);
+              }}>Add rule</button>
+            </div>
+          </div>
+          <div className="field">
+            <label>Generated relevance expression</label>
             <input
               type="text"
               value={question.relevance_expression ?? ""}
               onChange={(e) => update("relevance_expression", e.target.value || null)}
               placeholder="e.g. gender == 'FEMALE' and age_years >= 12"
             />
+            <small style={{ color: "var(--muted)" }}>You can still edit the expression manually for advanced logic.</small>
           </div>
           <div className="field">
             <label>Calculated value (optional)</label>

@@ -49,6 +49,24 @@ export interface Choice {
   cascade_parent_value?: string | null;
 }
 
+export interface QuestionGroup {
+  id?: string;
+  title: string;
+  description?: string | null;
+  order_index: number;
+  section_id?: string | null;
+  repeatable: boolean;
+  min_repeats: number;
+  max_repeats?: number | null;
+}
+
+export interface SurveySection {
+  id?: string;
+  title: string;
+  description?: string | null;
+  order_index: number;
+}
+
 export interface Question {
   id?: string;
   code: string;
@@ -67,6 +85,8 @@ export interface Question {
   default_value?: string | null;
   cascade_parent_question_id?: string | null;
   choices: Choice[];
+  section_id?: string | null;
+  group_id?: string | null;
 }
 
 export interface SurveySummary {
@@ -81,6 +101,8 @@ export interface SurveySummary {
 }
 
 export interface SurveyDetail extends SurveySummary {
+  sections: SurveySection[];
+  groups: QuestionGroup[];
   questions: Question[];
 }
 
@@ -94,12 +116,24 @@ export interface UserAccount {
 }
 
 export type SubmissionStatus = "PENDING" | "UPLOADING" | "UPLOADED" | "SYNCED" | "FAILED";
+export type ReviewStatus = "RECEIVED" | "UNDER_REVIEW" | "HAS_ISSUES" | "APPROVED" | "REJECTED" | "RESUBMIT";
 
 export interface SubmissionAnswer {
   id: string;
   question_id: string;
   value_text: string | null;
   media_reference: string | null;
+  group_instance_index?: number | null;
+}
+
+export interface SubmissionReview {
+  id: string;
+  submission_id: string;
+  reviewer_id: string;
+  status: ReviewStatus;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Submission {
@@ -115,4 +149,34 @@ export interface Submission {
   synced_at: string | null;
   created_at: string;
   answers: SubmissionAnswer[];
+  review_status: ReviewStatus;
+  reviews: SubmissionReview[];
+}
+
+
+export interface Device {
+  id: string; device_id: string; user_id: string; app_version: string | null; platform: string;
+  last_seen_at: string | null; last_sync_at: string | null; last_sync_status: string | null;
+  failed_sync_count: number; sync_requested_at: string | null; is_active: boolean; note: string | null;
+}
+
+export interface SubmissionMapPoint {
+  id: string;
+  survey_id: string;
+  survey_title: string;
+  submitted_by_id: string;
+  latitude: number;
+  longitude: number;
+  collected_at: string | null;
+  status: string;
+}
+
+
+export interface Translation {
+  id: string;
+  entity_type: "SURVEY" | "SECTION" | "GROUP" | "QUESTION" | "CHOICE";
+  entity_id: string;
+  field: "title" | "description" | "label" | "hint";
+  language_code: string;
+  value: string;
 }
