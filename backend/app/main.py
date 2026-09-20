@@ -81,13 +81,43 @@ app.include_router(analytics.router)
 app.include_router(audit.router)
 
 
+def _apply_manual_column_migrations():
+    """
+    create_all() only creates whole tables that don't exist yet — it never
+    adds a new column to a table that already existed before this feature
+    was added. Several V2 features (question groups/sections, submission
+    reviews, media answers) added new columns to tables that already
+    existed from earlier versions of this app, so on a database that
+    already has data, those columns are silently missing and every query
+    that touches them fails with "column ... does not exist".
+    This runs every startup and is safe to repeat: each statement only
+    acts "IF NOT EXISTS".
+    """
+    from sqlalchemy import text
+
+    statements = [
+        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS section_id VARCHAR(36) REFERENCES survey_sections(id)",
+        "ALTER TABLE questions ADD COLUMN IF NOT EXISTS group_id VARCHAR(36) REFERENCES question_groups(id)",
+        "ALTER TABLE submissions ADD COLUMN IF NOT EXISTS review_status VARCHAR(32) NOT NULL DEFAULT 'RECEIVED'",
+        "ALTER TABLE submission_answers ADD COLUMN IF NOT EXISTS media_reference VARCHAR(1000)",
+        "ALTER TABLE submission_answers ADD COLUMN IF NOT EXISTS group_instance_index INTEGER",
+    ]
+    with engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+
+
 @app.on_event("startup")
 def on_startup():
     # In production, schema changes should go through Alembic migrations
     # (see alembic/). create_all is safe here because it only creates
     # missing tables — it never alters or drops existing ones — which keeps
-    # first-run/local/dev/test setup simple.
+    # first-run/local/dev/test setup simple. Order matters: create_all()
+    # must run first so new tables like survey_sections and question_groups
+    # exist before the ALTER statements below add columns that reference
+    # them.
     Base.metadata.create_all(bind=engine)
+    _apply_manual_column_migrations()
 
     # SEED_DEMO_DATA=true creates the demo admin/supervisor/enumerator
     # accounts and three example published surveys, so a fresh deployment
