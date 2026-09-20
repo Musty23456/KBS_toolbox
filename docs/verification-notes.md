@@ -87,3 +87,10 @@ could not compile or run any of it," not as "tested and working." The
 backend and web dashboard are lower-risk (partial static verification was
 possible for both). The Android app is the highest-risk piece — please
 build it first and report back whatever surfaces.
+
+
+## Phase 3 verification
+- Repeatable group instance indexes added to Android persistence and sync payloads.
+- Backend migration `0004_group_instance_index` added.
+- Backend Python compilation passes in the available environment.
+- Android Gradle compile could not be executed because the uploaded project does not contain `gradle-wrapper.jar`.
