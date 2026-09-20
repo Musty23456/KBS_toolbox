@@ -67,3 +67,4 @@ data class DeviceHeartbeatDto(
     val app_version: String?,
     val platform: String = "ANDROID"
 )
+
