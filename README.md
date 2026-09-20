@@ -58,7 +58,7 @@ cd web
 npm install
 cp .env.example .env   # defaults to http://localhost:8000, fine for local dev
 npm run dev
-# Dashboard at http://localhost:5173 — log in with admin@kbstoolbox.local / ChangeMe123!
+# Dashboard at http://localhost:5173 — log in with admin@kbstoolbox.app / ChangeMe123!
 
 # 3. Android app (Android Studio, or see android/README.md for CLI build)
 # Point it at the backend running on your machine:
@@ -93,9 +93,9 @@ via `docker compose up`):
 
 | Role          | Email                          | Password      |
 |---------------|---------------------------------|---------------|
-| Administrator | admin@kbstoolbox.local           | ChangeMe123!  |
-| Supervisor    | supervisor@kbstoolbox.local      | ChangeMe123!  |
-| Enumerator    | enumerator@kbstoolbox.local      | ChangeMe123!  |
+| Administrator | admin@kbstoolbox.app           | ChangeMe123!  |
+| Supervisor    | supervisor@kbstoolbox.app      | ChangeMe123!  |
+| Enumerator    | enumerator@kbstoolbox.app      | ChangeMe123!  |
 
 Three demo surveys (Household Survey 2026, Business Survey 2026, Population
 Survey 2026) are seeded with real skip logic, validation rules, and a
@@ -165,4 +165,3 @@ None of this is a substitute for actually building each piece. Treat your
 first `docker compose up`, `npm run build`, and `gradle build` as the real
 tests, and see `docs/verification-notes.md` for more detail on what to
 watch for.
-# KBS_toolbox
