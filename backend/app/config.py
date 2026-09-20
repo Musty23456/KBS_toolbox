@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
     RATE_LIMIT_PER_MINUTE: int = 60
+    MEDIA_ROOT: str = "./media"
 
     SEED_DEMO_DATA: bool = True
     DEMO_ADMIN_EMAIL: str = "admin@kbstoolbox.app"

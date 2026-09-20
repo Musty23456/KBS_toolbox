@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.base import TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.review import ReviewStatus
 
 
 class SubmissionStatus(str, enum.Enum):
@@ -30,6 +31,8 @@ class Submission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Generated on-device at capture time; used to deduplicate retried uploads.
     client_submission_uuid: Mapped[str] = mapped_column(String(36), nullable=False)
 
+    review_status: Mapped[ReviewStatus] = mapped_column(Enum(ReviewStatus), default=ReviewStatus.RECEIVED, nullable=False)
+
     status: Mapped[SubmissionStatus] = mapped_column(
         Enum(SubmissionStatus), default=SubmissionStatus.UPLOADED, nullable=False
     )
@@ -45,6 +48,7 @@ class Submission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     submitted_by = relationship("User", back_populates="submissions", foreign_keys=[submitted_by_id])
     answers = relationship("SubmissionAnswer", back_populates="submission", cascade="all, delete-orphan")
     sync_metadata = relationship("SyncMetadata", back_populates="submission", uselist=False, cascade="all, delete-orphan")
+    reviews = relationship("SubmissionReview", back_populates="submission", cascade="all, delete-orphan", order_by="SubmissionReview.created_at.desc()")
 
 
 class SubmissionAnswer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -61,6 +65,7 @@ class SubmissionAnswer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # For media answers (photo/audio/signature), this stores a reference
     # (object storage key or file path) rather than the binary itself.
     media_reference: Mapped[str] = mapped_column(String(1000), nullable=True)
+    group_instance_index: Mapped[int] = mapped_column(nullable=True)
 
     submission = relationship("Submission", back_populates="answers")
     question = relationship("Question")

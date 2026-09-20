@@ -30,6 +30,8 @@ class Question(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "questions"
 
     survey_version_id: Mapped[str] = mapped_column(String(36), ForeignKey("survey_versions.id"), nullable=False)
+    section_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("survey_sections.id"), nullable=True)
+    group_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("question_groups.id"), nullable=True)
 
     code: Mapped[str] = mapped_column(String(100), nullable=False)  # stable machine name, e.g. "gender"
     label: Mapped[str] = mapped_column(Text, nullable=False)  # human-readable prompt
@@ -61,6 +63,8 @@ class Question(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     survey_version = relationship("SurveyVersion", back_populates="questions")
+    section = relationship("SurveySection", back_populates="questions")
+    group = relationship("QuestionGroup", back_populates="questions")
     choices = relationship("Choice", back_populates="question", order_by="Choice.order_index", cascade="all, delete-orphan")
 
 

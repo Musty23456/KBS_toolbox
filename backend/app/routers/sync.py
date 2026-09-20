@@ -8,7 +8,8 @@ from app.dependencies import get_current_user
 from app.models.question import Question
 from app.models.survey import Survey, SurveyStatus, SurveyVersion
 from app.models.sync import SyncMetadata, SyncStatus
-from app.models.user import User
+from app.models.user import RoleName, User
+from app.models.device import Device
 from app.routers.submissions import _create_submission
 from app.routers.surveys import _to_detail
 from app.schemas.sync import SyncDownloadResponse, SyncUploadRequest, SyncUploadResponse, SyncUploadResultItem
@@ -22,13 +23,8 @@ def sync_upload(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Accepts the Android app's entire offline queue in one batch. Each item is
-    processed independently and idempotently (keyed by client_submission_uuid)
-    so a partially-failed batch can be safely retried in full.
-    """
+    """Accept a batch of offline submissions and record device sync telemetry."""
     results: list[SyncUploadResultItem] = []
-
     for item in payload.submissions:
         try:
             submission = _create_submission(db, item, current_user)
@@ -39,42 +35,34 @@ def sync_upload(
                 sync_meta.status = SyncStatus.SUCCESS
                 sync_meta.client_device_id = payload.device_id
             else:
-                sync_meta = SyncMetadata(
+                db.add(SyncMetadata(
                     submission_id=submission.id,
                     client_device_id=payload.device_id,
                     status=SyncStatus.SUCCESS,
                     attempt_count=1,
                     last_attempt_at=datetime.now(timezone.utc),
-                )
-                db.add(sync_meta)
+                ))
             db.commit()
-
-            results.append(
-                SyncUploadResultItem(
-                    client_submission_uuid=item.client_submission_uuid,
-                    accepted=True,
-                    server_submission_id=submission.id,
-                )
-            )
+            results.append(SyncUploadResultItem(client_submission_uuid=item.client_submission_uuid, accepted=True, server_submission_id=submission.id))
         except HTTPException as exc:
             db.rollback()
-            results.append(
-                SyncUploadResultItem(
-                    client_submission_uuid=item.client_submission_uuid,
-                    accepted=False,
-                    error=str(exc.detail),
-                )
-            )
-        except Exception as exc:  # noqa: BLE001 - one bad item must not abort the whole batch
+            results.append(SyncUploadResultItem(client_submission_uuid=item.client_submission_uuid, accepted=False, error=str(exc.detail)))
+        except Exception as exc:  # noqa: BLE001
             db.rollback()
-            results.append(
-                SyncUploadResultItem(
-                    client_submission_uuid=item.client_submission_uuid,
-                    accepted=False,
-                    error=f"Unexpected error: {exc}",
-                )
-            )
+            results.append(SyncUploadResultItem(client_submission_uuid=item.client_submission_uuid, accepted=False, error=f"Unexpected error: {exc}"))
 
+    now = datetime.now(timezone.utc)
+    device = db.query(Device).filter(Device.device_id == payload.device_id).first()
+    if not device:
+        device = Device(device_id=payload.device_id, user_id=current_user.id)
+        db.add(device)
+    elif device.user_id != current_user.id and current_user.role == RoleName.ENUMERATOR:
+        raise HTTPException(status_code=403, detail="Device belongs to another user")
+    device.last_seen_at = now
+    device.last_sync_at = now
+    device.last_sync_status = "PARTIAL" if any(not r.accepted for r in results) else "SUCCESS"
+    device.failed_sync_count += sum(1 for r in results if not r.accepted)
+    db.commit()
     return SyncUploadResponse(results=results)
 
 

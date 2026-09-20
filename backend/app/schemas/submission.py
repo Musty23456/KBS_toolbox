@@ -3,12 +3,14 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.submission import SubmissionStatus
+from app.schemas.review import ReviewOut
 
 
 class AnswerIn(BaseModel):
     question_id: str
     value_text: str | None = None
     media_reference: str | None = None
+    group_instance_index: int | None = Field(default=None, ge=0)
 
 
 class AnswerOut(BaseModel):
@@ -17,6 +19,7 @@ class AnswerOut(BaseModel):
     question_id: str
     value_text: str | None
     media_reference: str | None
+    group_instance_index: int | None
 
 
 class SubmissionCreate(BaseModel):
@@ -40,9 +43,11 @@ class SubmissionOut(BaseModel):
     submitted_by_id: str
     client_submission_uuid: str
     status: SubmissionStatus
+    review_status: str
     gps_latitude: float | None
     gps_longitude: float | None
     collected_at: str | None
     synced_at: str | None
     created_at: datetime
     answers: list[AnswerOut] = []
+    reviews: list[ReviewOut] = []

@@ -10,13 +10,7 @@ class UserOut(BaseModel):
 
     id: str
     full_name: str
-    # Plain str (not EmailStr) here on purpose: this is what we send BACK to
-    # the client, and a handful of older accounts were created with
-    # "@kbstoolbox.local" addresses before that domain was changed to
-    # ".app". EmailStr rejects ".local" as a reserved TLD, which crashed
-    # this response whenever an old account showed up in a list. Strict
-    # email validation still applies below, on account creation.
-    email: str
+    email: EmailStr
     role: RoleName
     is_active: bool
     created_at: datetime

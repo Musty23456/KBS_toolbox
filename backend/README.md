@@ -95,9 +95,9 @@ After running the seed script (`python -m app.seed`, or automatically via
 
 | Role          | Email                          | Password      |
 |---------------|---------------------------------|---------------|
-| Administrator | admin@kbstoolbox.local           | ChangeMe123!  |
-| Supervisor    | supervisor@kbstoolbox.local      | ChangeMe123!  |
-| Enumerator    | enumerator@kbstoolbox.local      | ChangeMe123!  |
+| Administrator | admin@kbstoolbox.app           | ChangeMe123!  |
+| Supervisor    | supervisor@kbstoolbox.app      | ChangeMe123!  |
+| Enumerator    | enumerator@kbstoolbox.app      | ChangeMe123!  |
 
 **Change or remove these before any production deployment.**
 

@@ -1,4 +1,3 @@
-
 """
 Seeds demo data so the platform can be tried out immediately:
 - One user per role (administrator, supervisor, enumerator)

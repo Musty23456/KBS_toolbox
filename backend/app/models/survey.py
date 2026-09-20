@@ -39,6 +39,19 @@ class Survey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     assigned_enumerators = relationship("User", secondary=survey_assignments)
 
 
+class SurveySection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    __tablename__ = "survey_sections"
+
+    survey_version_id: Mapped[str] = mapped_column(String(36), ForeignKey("survey_versions.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    survey_version = relationship("SurveyVersion", back_populates="sections")
+    questions = relationship("Question", back_populates="section")
+    groups = relationship("QuestionGroup", back_populates="section")
+
+
 class SurveyVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
     Every publish of a survey creates a new immutable version. Submissions
@@ -53,6 +66,7 @@ class SurveyVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_current: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     survey = relationship("Survey", back_populates="versions")
+    sections = relationship("SurveySection", back_populates="survey_version", order_by="SurveySection.order_index", cascade="all, delete-orphan")
     questions = relationship(
         "Question", back_populates="survey_version", order_by="Question.order_index", cascade="all, delete-orphan"
     )

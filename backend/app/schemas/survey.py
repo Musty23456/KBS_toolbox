@@ -18,6 +18,31 @@ class ChoiceOut(ChoiceIn):
     id: str
 
 
+class SectionIn(BaseModel):
+    title: str = Field(max_length=255)
+    description: str | None = None
+    order_index: int = 0
+
+
+class QuestionGroupIn(BaseModel):
+    title: str = Field(max_length=255)
+    description: str | None = None
+    order_index: int = 0
+    section_id: str | None = None
+    repeatable: bool = False
+    min_repeats: int = Field(default=1, ge=1)
+    max_repeats: int | None = Field(default=None, ge=1)
+
+class QuestionGroupOut(QuestionGroupIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+
+
+class SectionOut(SectionIn):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+
+
 class QuestionIn(BaseModel):
     code: str = Field(max_length=100)
     label: str
@@ -35,6 +60,8 @@ class QuestionIn(BaseModel):
     default_value: str | None = None
     cascade_parent_question_id: str | None = None
     choices: list[ChoiceIn] = []
+    section_id: str | None = None
+    group_id: str | None = None
 
 
 class QuestionOut(BaseModel):
@@ -56,6 +83,8 @@ class QuestionOut(BaseModel):
     calculation_expression: str | None
     default_value: str | None
     cascade_parent_question_id: str | None
+    section_id: str | None
+    group_id: str | None
     choices: list[ChoiceOut] = []
 
 
@@ -63,6 +92,8 @@ class SurveyCreate(BaseModel):
     title: str = Field(max_length=255)
     description: str | None = None
     questions: list[QuestionIn] = []
+    sections: list[SectionIn] = []
+    groups: list[QuestionGroupIn] = []
     assigned_enumerator_ids: list[str] = []
 
 
@@ -70,6 +101,8 @@ class SurveyUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
     description: str | None = None
     questions: list[QuestionIn] | None = None
+    sections: list[SectionIn] | None = None
+    groups: list[QuestionGroupIn] | None = None
     # None = leave assignments unchanged. [] = explicitly open to every
     # enumerator. A non-empty list = restrict to just those enumerator ids.
     assigned_enumerator_ids: list[str] | None = None
@@ -89,4 +122,6 @@ class SurveySummaryOut(BaseModel):
 
 
 class SurveyDetailOut(SurveySummaryOut):
+    sections: list[SectionOut] = []
+    groups: list[QuestionGroupOut] = []
     questions: list[QuestionOut] = []

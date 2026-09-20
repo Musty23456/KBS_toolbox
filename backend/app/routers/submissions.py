@@ -58,6 +58,7 @@ def _create_submission(db: Session, payload: SubmissionCreate, user: User) -> Su
                 question_id=answer.question_id,
                 value_text=answer.value_text,
                 media_reference=answer.media_reference,
+                group_instance_index=answer.group_instance_index,
             )
         )
 
@@ -84,7 +85,7 @@ def list_submissions(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
 ):
-    query = db.query(Submission).options(joinedload(Submission.answers))
+    query = db.query(Submission).options(joinedload(Submission.answers), joinedload(Submission.reviews))
     if survey_id:
         query = query.filter(Submission.survey_id == survey_id)
     if status_filter:
@@ -102,7 +103,7 @@ def get_submission(
 ):
     submission = (
         db.query(Submission)
-        .options(joinedload(Submission.answers))
+        .options(joinedload(Submission.answers), joinedload(Submission.reviews))
         .filter(Submission.id == submission_id)
         .first()
     )

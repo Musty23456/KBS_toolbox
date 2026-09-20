@@ -4,13 +4,15 @@ from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.dependencies import get_current_user, require_roles
 from app.models.question import Choice, Question
-from app.models.survey import Survey, SurveyStatus, SurveyVersion
+from app.models.group import QuestionGroup
+from app.models.survey import Survey, SurveySection, SurveyStatus, SurveyVersion
 from app.models.user import RoleName, User
 from app.schemas.survey import (
     SurveyCreate,
     SurveyDetailOut,
     SurveySummaryOut,
     SurveyUpdate,
+    SectionOut,
 )
 from app.services.audit import log_action
 
@@ -34,6 +36,8 @@ def _to_detail(survey: Survey) -> SurveyDetailOut:
         created_at=survey.created_at,
         current_version_number=version.version_number if version else None,
         current_version_id=version.id if version else None,
+        sections=version.sections if version else [],
+        groups=version.groups if version else [],
         questions=version.questions if version else [],
         assigned_enumerator_ids=[u.id for u in survey.assigned_enumerators],
     )
@@ -58,6 +62,8 @@ def _load_survey_or_404(db: Session, survey_id: str) -> Survey:
         db.query(Survey)
         .options(
             joinedload(Survey.versions).joinedload(SurveyVersion.questions).joinedload(Question.choices),
+            joinedload(Survey.versions).joinedload(SurveyVersion.sections),
+            joinedload(Survey.versions).joinedload(SurveyVersion.groups),
             joinedload(Survey.assigned_enumerators),
         )
         .filter(Survey.id == survey_id)
@@ -76,7 +82,34 @@ def _apply_assignments(db: Session, survey: Survey, enumerator_ids: list[str]) -
         survey.assigned_enumerators = []
 
 
-def _write_version_questions(db: Session, version: SurveyVersion, questions_in) -> None:
+def _write_version_sections(db: Session, version: SurveyVersion, sections_in):
+    mapping = {}
+    for s_in in sections_in:
+        section = SurveySection(survey_version_id=version.id, title=s_in.title, description=s_in.description, order_index=s_in.order_index)
+        db.add(section); db.flush(); mapping[s_in.order_index] = section.id
+        mapping[f"local-{s_in.order_index - 1}"] = section.id
+    return mapping
+
+
+def _write_version_groups(db: Session, version: SurveyVersion, groups_in, section_map=None):
+    mapping = {}
+    for g_in in groups_in:
+        group = QuestionGroup(
+            survey_version_id=version.id,
+            section_id=g_in.section_id if not section_map else section_map.get(g_in.section_id, g_in.section_id),
+            title=g_in.title,
+            description=g_in.description,
+            order_index=g_in.order_index,
+            repeatable=g_in.repeatable,
+            min_repeats=g_in.min_repeats,
+            max_repeats=g_in.max_repeats,
+        )
+        db.add(group); db.flush()
+        mapping[g_in.order_index] = group.id
+        mapping[f"local-{g_in.order_index - 1}"] = group.id
+    return mapping
+
+def _write_version_questions(db: Session, version: SurveyVersion, questions_in, section_map=None, group_map=None) -> None:
     for q_in in questions_in:
         question = Question(
             survey_version_id=version.id,
@@ -95,6 +128,8 @@ def _write_version_questions(db: Session, version: SurveyVersion, questions_in) 
             calculation_expression=q_in.calculation_expression,
             default_value=q_in.default_value,
             cascade_parent_question_id=q_in.cascade_parent_question_id,
+            section_id=q_in.section_id if not section_map else section_map.get(q_in.section_id, q_in.section_id),
+            group_id=q_in.group_id if not group_map else group_map.get(q_in.group_id, q_in.group_id),
         )
         db.add(question)
         db.flush()  # get question.id for its choices
@@ -156,7 +191,9 @@ def create_survey(
     db.add(version)
     db.flush()
 
-    _write_version_questions(db, version, payload.questions)
+    section_map = _write_version_sections(db, version, payload.sections)
+    group_map = _write_version_groups(db, version, payload.groups, section_map)
+    _write_version_questions(db, version, payload.questions, section_map, group_map)
 
     db.commit()
     survey = _load_survey_or_404(db, survey.id)
@@ -198,7 +235,9 @@ def update_survey(
         )
         db.add(new_version)
         db.flush()
-        _write_version_questions(db, new_version, payload.questions)
+        section_map = _write_version_sections(db, new_version, payload.sections or [])
+        group_map = _write_version_groups(db, new_version, payload.groups or [], section_map)
+        _write_version_questions(db, new_version, payload.questions, section_map, group_map)
 
     db.commit()
     survey = _load_survey_or_404(db, survey.id)
