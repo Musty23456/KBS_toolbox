@@ -1,5 +1,5 @@
 package com.kbstoolbox.app.data.remote
-import com.kbstoolbox.app.data.remote.dto.LoginRequestDto
+import com.kbstoolbox.app.data.remote.dto.MediaUploadResponseDto
 import com.kbstoolbox.app.data.remote.dto.LoginRequestDto
 import com.kbstoolbox.app.data.remote.dto.RegisterRequestDto
 import com.kbstoolbox.app.data.remote.dto.SurveyDetailDto
