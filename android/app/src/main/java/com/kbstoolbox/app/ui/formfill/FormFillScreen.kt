@@ -146,91 +146,171 @@ fun FormFillScreen(surveyId: String, submissionUuid: String, onDone: () -> Unit)
                     .padding(16.dp)
                     .weight(1f)
             ) {
-                items(state.visibleQuestions, key = { it.id }) { question ->
-                    val index = state.questions.indexOf(question)
-                    QuestionField(
-                        question = question,
-                        index = index,
-                        value = state.textAnswers[question.id],
-                        mediaValue = state.mediaAnswers[question.id],
-                        choices = viewModel.choicesFor(question),
-                        errorMessage = state.validationErrors[question.id],
-                        onTextChange = { viewModel.updateTextAnswer(question.id, it) },
-                        onMultiToggle = { choiceValue, checked -> viewModel.toggleMultipleChoice(question.id, choiceValue, checked) },
-                        onCaptureGps = {
-                            pendingGpsQuestionId = question.id
+                items(state.visibleQuestions, key = { "q:${it.id}" }) { question ->
+                    RenderQuestion(
+                        question = question, instanceIndex = null, index = state.questions.indexOf(question),
+                        state = state, viewModel = viewModel, context = context, coroutineScope = coroutineScope,
+                        pendingGpsQuestionId = { pendingGpsQuestionId = it },
+                        pendingPhoto = { qid, uri -> pendingPhotoQuestionId = qid; pendingPhotoUri = uri },
+                        setBarcode = { pendingBarcodeQuestionId = it },
+                        setRecording = { recordingQuestionId = it },
+                        recordingQuestionId = recordingQuestionId,
+                        audioRecorder = audioRecorder,
+                        onCaptureLocation = { qid, instance ->
+                            pendingGpsQuestionId = qid
                             val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                            if (granted) {
-                                coroutineScope.launch {
-                                    val location = LocationCapture.captureCurrentLocation(context)
-                                    if (location != null) viewModel.onGpsCaptured(question.id, location.latitude, location.longitude)
-                                }
-                            } else {
-                                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                            }
+                            if (granted) coroutineScope.launch {
+                                val location = LocationCapture.captureCurrentLocation(context)
+                                if (location != null) viewModel.onGpsCaptured(qid, location.latitude, location.longitude, instance)
+                            } else locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         },
-                        onCapturePhoto = {
+                        onTakePhoto = { qid, instance ->
                             val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-                            if (!granted) {
-                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
+                            if (!granted) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                             val file = MediaFiles.newPhotoFile(context)
                             val uri = MediaFiles.uriForFile(context, file)
-                            pendingPhotoQuestionId = question.id
+                            pendingPhotoQuestionId = qid
                             pendingPhotoUri = uri
                             takePictureLauncher.launch(uri)
                         },
-                        onStartAudio = {
-                            recordingQuestionId = question.id
+                        onStartAudio = { qid ->
+                            recordingQuestionId = qid
                             val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                            if (granted) {
-                                audioRecorder.start()
-                            } else {
-                                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                            }
+                            if (granted) audioRecorder.start() else audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         },
-                        onStopAudio = {
+                        onStopAudio = { qid, instance ->
                             val file = audioRecorder.stop()
                             recordingQuestionId = null
-                            if (file != null) viewModel.setMediaAnswer(question.id, file.absolutePath)
+                            if (file != null) viewModel.setMediaAnswer(qid, file.absolutePath, instance)
                         },
-                        isRecordingAudio = recordingQuestionId == question.id,
-                        onSignatureSaved = { path -> viewModel.setMediaAnswer(question.id, path) },
-                        onScanBarcode = {
-                            pendingBarcodeQuestionId = question.id
-                            val options = ScanOptions().setBeepEnabled(false).setOrientationLocked(false)
-                            barcodeLauncher.launch(options)
+                        onSignature = { qid, path, instance -> viewModel.setMediaAnswer(qid, path, instance) },
+                        onScan = { qid ->
+                            pendingBarcodeQuestionId = qid
+                            barcodeLauncher.launch(ScanOptions().setBeepEnabled(false).setOrientationLocked(false))
                         }
                     )
                 }
+
+                state.groups.sortedBy { it.orderIndex }.forEach { group ->
+                    item(key = "group:${group.id}") {
+                        androidx.compose.material3.Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(group.title, style = MaterialTheme.typography.headlineSmall)
+                                group.description?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                                Text(
+                                    if (group.repeatable) "${state.groupInstances[group.id]?.size ?: 1} record(s)" else "One record",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    val instances = state.groupInstances[group.id] ?: listOf(0)
+                    instances.forEach { instance ->
+                        val groupQuestions = state.questions.filter { it.groupId == group.id && state.isVisible(it, instance) }.sortedBy { it.orderIndex }
+                        item(key = "instance:${group.id}:$instance") {
+                            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                androidx.compose.material3.Text(
+                                    "${group.title} — ${instance + 1}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                                groupQuestions.forEachIndexed { localIndex, question ->
+                                    RenderQuestion(
+                                        question = question, instanceIndex = instance, index = localIndex,
+                                        state = state, viewModel = viewModel, context = context, coroutineScope = coroutineScope,
+                                        pendingGpsQuestionId = { pendingGpsQuestionId = it },
+                                        pendingPhoto = { qid, uri -> pendingPhotoQuestionId = qid; pendingPhotoUri = uri },
+                                        setBarcode = { pendingBarcodeQuestionId = it },
+                                        setRecording = { recordingQuestionId = it },
+                                        recordingQuestionId = recordingQuestionId, audioRecorder = audioRecorder,
+                                        onCaptureLocation = { qid, inst ->
+                                            pendingGpsQuestionId = qid
+                                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                            if (granted) coroutineScope.launch {
+                                                val location = LocationCapture.captureCurrentLocation(context)
+                                                if (location != null) viewModel.onGpsCaptured(qid, location.latitude, location.longitude, inst)
+                                            } else locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                        },
+                                        onTakePhoto = { qid, inst ->
+                                            val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                                            if (!granted) cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                            val file = MediaFiles.newPhotoFile(context)
+                                            val uri = MediaFiles.uriForFile(context, file)
+                                            pendingPhotoQuestionId = qid; pendingPhotoUri = uri
+                                            takePictureLauncher.launch(uri)
+                                        },
+                                        onStartAudio = { qid -> recordingQuestionId = qid; if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) audioRecorder.start() else audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                                        onStopAudio = { qid, inst -> val file = audioRecorder.stop(); recordingQuestionId = null; if (file != null) viewModel.setMediaAnswer(qid, file.absolutePath, inst) },
+                                        onSignature = { qid, path, inst -> viewModel.setMediaAnswer(qid, path, inst) },
+                                        onScan = { qid -> pendingBarcodeQuestionId = qid; barcodeLauncher.launch(ScanOptions().setBeepEnabled(false).setOrientationLocked(false)) }
+                                    )
+                                }
+                                if (group.repeatable && instance != 0) {
+                                    Button(onClick = { viewModel.removeGroupInstance(group.id, instance) }, modifier = Modifier.fillMaxWidth()) { Text("Remove ${group.title} #${instance + 1}") }
+                                }
+                            }
+                        }
+                    }
+
+                    if (group.repeatable) {
+                        item(key = "add:${group.id}") {
+                            Button(onClick = { viewModel.addGroupInstance(group.id) }, modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                                Text("+ Add ${group.title}")
+                            }
+                        }
+                    }
+                }
             }
 
-            state.errorMessage?.let {
-                Text(
-                    it,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
-
+            state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
             Column(modifier = Modifier.padding(16.dp)) {
-                Button(
-                    onClick = { viewModel.saveDraft {} },
-                    enabled = !state.isSaving,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Save draft")
-                }
-                Button(
-                    onClick = { viewModel.submit() },
-                    enabled = !state.isSaving,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                ) {
-                    Text(if (state.isSaving) "Saving…" else "Complete submission")
-                }
+                Button(onClick = { viewModel.saveDraft {} }, enabled = !state.isSaving, modifier = Modifier.fillMaxWidth()) { Text("Save draft") }
+                Button(onClick = { viewModel.submit() }, enabled = !state.isSaving, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text(if (state.isSaving) "Saving…" else "Complete submission") }
             }
         }
     }
+}
+
+@Composable
+private fun RenderQuestion(
+    question: com.kbstoolbox.app.data.local.entity.QuestionEntity,
+    instanceIndex: Int?,
+    index: Int,
+    state: FormFillUiState,
+    viewModel: FormFillViewModel,
+    context: android.content.Context,
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
+    pendingGpsQuestionId: (String) -> Unit,
+    pendingPhoto: (String, android.net.Uri) -> Unit,
+    setBarcode: (String) -> Unit,
+    setRecording: (String) -> Unit,
+    recordingQuestionId: String?,
+    audioRecorder: AudioRecorder,
+    onCaptureLocation: (String, Int?) -> Unit,
+    onTakePhoto: (String, Int?) -> Unit,
+    onStartAudio: (String) -> Unit,
+    onStopAudio: (String, Int?) -> Unit,
+    onSignature: (String, String, Int?) -> Unit,
+    onScan: (String) -> Unit
+) {
+    val key = if (instanceIndex == null) question.id else "${question.id}#$instanceIndex"
+    QuestionField(
+        question = question,
+        index = index,
+        value = state.textAnswers[key],
+        mediaValue = state.mediaAnswers[key],
+        choices = viewModel.choicesFor(question),
+        errorMessage = state.validationErrors[key],
+        onTextChange = { viewModel.updateTextAnswer(question.id, it, instanceIndex) },
+        onMultiToggle = { value, checked -> viewModel.toggleMultipleChoice(question.id, value, checked, instanceIndex) },
+        onCaptureGps = { onCaptureLocation(question.id, instanceIndex) },
+        onCapturePhoto = { onTakePhoto(question.id, instanceIndex) },
+        onStartAudio = { onStartAudio(question.id) },
+        onStopAudio = { onStopAudio(question.id, instanceIndex) },
+        isRecordingAudio = recordingQuestionId == question.id,
+        onSignatureSaved = { path -> onSignature(question.id, path, instanceIndex) },
+        onScanBarcode = { onScan(question.id) }
+    )
 }

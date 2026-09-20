@@ -13,6 +13,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,16 +35,22 @@ import com.kbstoolbox.app.util.ViewModelFactory
 fun SubmissionsScreen() {
     val context = LocalContext.current
     val viewModel: SubmissionsViewModel = viewModel(
-        factory = ViewModelFactory { SubmissionsViewModel(ServiceLocator.submissionRepository(context)) }
+        factory = ViewModelFactory { SubmissionsViewModel(context, ServiceLocator.submissionRepository(context), ServiceLocator.syncRepository(context)) }
     )
     val submissions by viewModel.submissions.collectAsState()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("My submissions") }) }) { padding ->
+    val pending = submissions.count { it.status == LocalSyncStatus.PENDING_SYNC || it.status == LocalSyncStatus.FAILED }
+    Scaffold(topBar = { TopAppBar(title = { Text("Sync Center") }) }) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column { Text("Pending: $pending"); Text("Synced: ${submissions.count { it.status == LocalSyncStatus.SYNCED }}") }
+                Button(onClick = { viewModel.syncNow() }) { Text("Sync now") }
+            }
+            HorizontalDivider()
         if (submissions.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .padding(24.dp)
             ) {
                 Text("No submissions yet.", style = MaterialTheme.typography.titleLarge)
@@ -51,12 +59,12 @@ fun SubmissionsScreen() {
         } else {
             LazyColumn(modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .padding(16.dp)) {
                 items(submissions, key = { it.clientSubmissionUuid }) { submission ->
                     SubmissionRow(submission)
                 }
             }
+        }
         }
     }
 }

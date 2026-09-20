@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import com.kbstoolbox.app.data.local.entity.ChoiceEntity
 import com.kbstoolbox.app.data.local.entity.QuestionEntity
+import com.kbstoolbox.app.data.local.entity.QuestionGroupEntity
 import com.kbstoolbox.app.data.local.entity.SurveyEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -25,6 +26,9 @@ interface SurveyDao {
     @Query("SELECT * FROM questions WHERE surveyId = :surveyId ORDER BY orderIndex ASC")
     suspend fun getQuestions(surveyId: String): List<QuestionEntity>
 
+    @Query("SELECT * FROM question_groups WHERE surveyId = :surveyId ORDER BY orderIndex ASC")
+    suspend fun getGroups(surveyId: String): List<QuestionGroupEntity>
+
     @Query("SELECT * FROM choices WHERE questionId IN (:questionIds)")
     suspend fun getChoicesForQuestions(questionIds: List<String>): List<ChoiceEntity>
 
@@ -32,10 +36,16 @@ interface SurveyDao {
     suspend fun insertSurveys(surveys: List<SurveyEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGroups(groups: List<QuestionGroupEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertQuestions(questions: List<QuestionEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertChoices(choices: List<ChoiceEntity>)
+
+    @Query("DELETE FROM question_groups WHERE surveyId = :surveyId")
+    suspend fun deleteGroupsForSurvey(surveyId: String)
 
     @Query("DELETE FROM questions WHERE surveyId = :surveyId")
     suspend fun deleteQuestionsForSurvey(surveyId: String)
@@ -52,11 +62,14 @@ interface SurveyDao {
     suspend fun replaceSurveyDefinition(
         survey: SurveyEntity,
         questions: List<QuestionEntity>,
-        choices: List<ChoiceEntity>
+        choices: List<ChoiceEntity>,
+        groups: List<QuestionGroupEntity> = emptyList()
     ) {
         deleteChoicesForSurvey(survey.id)
         deleteQuestionsForSurvey(survey.id)
+        deleteGroupsForSurvey(survey.id)
         insertSurveys(listOf(survey))
+        insertGroups(groups)
         insertQuestions(questions)
         insertChoices(choices)
     }

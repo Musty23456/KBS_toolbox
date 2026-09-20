@@ -23,5 +23,6 @@ data class SubmissionAnswerEntity(
     val questionId: String,
     val valueText: String?,
     /** Local file path (photo/audio/signature) or scanned code (barcode). */
-    val mediaReference: String?
+    val mediaReference: String?,
+    val groupInstanceIndex: Int? = null
 )

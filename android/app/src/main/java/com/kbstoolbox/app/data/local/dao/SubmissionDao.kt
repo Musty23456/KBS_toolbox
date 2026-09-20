@@ -33,6 +33,9 @@ interface SubmissionDao {
     @Query("SELECT * FROM submission_answers WHERE submissionUuid = :uuid")
     suspend fun getAnswers(uuid: String): List<SubmissionAnswerEntity>
 
+    @Query("UPDATE submission_answers SET mediaReference = :reference WHERE id = :answerId")
+    suspend fun updateMediaReference(answerId: Long, reference: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSubmission(submission: SubmissionEntity)
 

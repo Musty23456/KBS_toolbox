@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kbstoolbox.app.data.local.entity.ChoiceEntity
 import com.kbstoolbox.app.data.local.entity.QuestionEntity
+import com.kbstoolbox.app.data.local.entity.QuestionGroupEntity
 import com.kbstoolbox.app.data.local.entity.SubmissionAnswerEntity
 import com.kbstoolbox.app.data.local.entity.SubmissionEntity
 import com.kbstoolbox.app.data.repository.SubmissionRepository
@@ -17,10 +18,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+private fun answerKey(questionId: String, groupInstanceIndex: Int?): String =
+    if (groupInstanceIndex == null) questionId else "$questionId#$groupInstanceIndex"
+
+private fun splitAnswerKey(key: String): Pair<String, Int?> {
+    val parts = key.split("#", limit = 2)
+    return if (parts.size == 2) parts[0] to parts[1].toIntOrNull() else key to null
+}
+
 data class FormFillUiState(
     val isLoading: Boolean = true,
     val surveyTitle: String = "",
     val questions: List<QuestionEntity> = emptyList(),
+    val groups: List<QuestionGroupEntity> = emptyList(),
+    val groupInstances: Map<String, List<Int>> = emptyMap(),
     val choicesByQuestion: Map<String, List<ChoiceEntity>> = emptyMap(),
     val textAnswers: Map<String, String> = emptyMap(),
     val mediaAnswers: Map<String, String> = emptyMap(),
@@ -42,7 +53,18 @@ data class FormFillUiState(
     fun isVisible(question: QuestionEntity): Boolean =
         ExpressionEvaluator.isRelevant(question.relevanceExpression, answersByCode())
 
-    val visibleQuestions: List<QuestionEntity> get() = questions.filter { isVisible(it) }
+    fun isVisible(question: QuestionEntity, groupInstanceIndex: Int): Boolean {
+        if (question.groupId == null) return isVisible(question)
+        val codeById = questions.filter { it.groupId == question.groupId }.associate { it.id to it.code }
+        val values = mutableMapOf<String, Any?>()
+        textAnswers.forEach { (key, value) ->
+            val (qid, instance) = splitAnswerKey(key)
+            if (instance == groupInstanceIndex) codeById[qid]?.let { code -> values[code] = value.toDoubleOrNull() ?: value }
+        }
+        return ExpressionEvaluator.isRelevant(question.relevanceExpression, values)
+    }
+
+    val visibleQuestions: List<QuestionEntity> get() = questions.filter { it.groupId == null && isVisible(it) }
 }
 
 class FormFillViewModel(
@@ -74,8 +96,17 @@ class FormFillViewModel(
                 existingUuid = existingSubmissionUuid
             )
             val existingAnswers = submissionRepository.getAnswers(submission.clientSubmissionUuid)
-            val textAnswers = existingAnswers.filter { it.valueText != null }.associate { it.questionId to it.valueText!! }
-            val mediaAnswers = existingAnswers.filter { it.mediaReference != null }.associate { it.questionId to it.mediaReference!! }
+            val groups = definition.groups.sortedBy { it.orderIndex }
+            val instances = groups.associate { group ->
+                val indexes = existingAnswers.filter { answer ->
+                    answer.groupInstanceIndex != null && definition.questions.any { it.id == answer.questionId && it.groupId == group.id }
+                }.mapNotNull { it.groupInstanceIndex }.distinct().sorted()
+                group.id to if (group.repeatable) {
+                    if (indexes.isEmpty()) listOf(0) else indexes
+                } else listOf(0)
+            }
+            val textAnswers = existingAnswers.filter { it.valueText != null }.associate { answer -> answerKey(answer.questionId, answer.groupInstanceIndex) to answer.valueText!! }
+            val mediaAnswers = existingAnswers.filter { it.mediaReference != null }.associate { answer -> answerKey(answer.questionId, answer.groupInstanceIndex) to answer.mediaReference!! }
             capturedGpsLat = submission.gpsLatitude
             capturedGpsLng = submission.gpsLongitude
 
@@ -83,6 +114,8 @@ class FormFillViewModel(
                 isLoading = false,
                 surveyTitle = definition.survey.title,
                 questions = definition.questions,
+                groups = groups,
+                groupInstances = instances,
                 choicesByQuestion = definition.choicesByQuestion,
                 textAnswers = textAnswers,
                 mediaAnswers = mediaAnswers
@@ -92,33 +125,34 @@ class FormFillViewModel(
 
     fun submissionUuid(): String = if (::submission.isInitialized) submission.clientSubmissionUuid else ""
 
-    fun updateTextAnswer(questionId: String, value: String) {
+    fun updateTextAnswer(questionId: String, value: String, groupInstanceIndex: Int? = null) {
         val state = _uiState.value
         _uiState.value = state.copy(
-            textAnswers = state.textAnswers + (questionId to value),
-            validationErrors = state.validationErrors - questionId
+            textAnswers = state.textAnswers + (answerKey(questionId, groupInstanceIndex) to value),
+            validationErrors = state.validationErrors - answerKey(questionId, groupInstanceIndex)
         )
     }
 
-    fun toggleMultipleChoice(questionId: String, choiceValue: String, checked: Boolean) {
+    fun toggleMultipleChoice(questionId: String, choiceValue: String, checked: Boolean, groupInstanceIndex: Int? = null) {
         val state = _uiState.value
-        val current = state.textAnswers[questionId]?.split("|")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
+        val key = answerKey(questionId, groupInstanceIndex)
+        val current = state.textAnswers[key]?.split("|")?.filter { it.isNotBlank() }?.toMutableSet() ?: mutableSetOf()
         if (checked) current.add(choiceValue) else current.remove(choiceValue)
-        _uiState.value = state.copy(textAnswers = state.textAnswers + (questionId to current.joinToString("|")))
+        _uiState.value = state.copy(textAnswers = state.textAnswers + (key to current.joinToString("|")))
     }
 
-    fun setMediaAnswer(questionId: String, reference: String) {
+    fun setMediaAnswer(questionId: String, reference: String, groupInstanceIndex: Int? = null) {
         val state = _uiState.value
         _uiState.value = state.copy(
-            mediaAnswers = state.mediaAnswers + (questionId to reference),
-            validationErrors = state.validationErrors - questionId
+            mediaAnswers = state.mediaAnswers + (answerKey(questionId, groupInstanceIndex) to reference),
+            validationErrors = state.validationErrors - answerKey(questionId, groupInstanceIndex)
         )
     }
 
-    fun onGpsCaptured(questionId: String, latitude: Double, longitude: Double) {
+    fun onGpsCaptured(questionId: String, latitude: Double, longitude: Double, groupInstanceIndex: Int? = null) {
         capturedGpsLat = latitude
         capturedGpsLng = longitude
-        updateTextAnswer(questionId, "$latitude,$longitude")
+        updateTextAnswer(questionId, "$latitude,$longitude", groupInstanceIndex)
     }
 
     /** Choices for a cascading question are filtered by the parent question's current answer. */
@@ -128,6 +162,33 @@ class FormFillViewModel(
         val parentValue = _uiState.value.textAnswers[parentId] ?: return emptyList()
         return all.filter { it.cascadeParentValue == null || it.cascadeParentValue == parentValue }
             .sortedBy { it.orderIndex }
+    }
+
+    fun addGroupInstance(groupId: String) {
+        val state = _uiState.value
+        val group = state.groups.firstOrNull { it.id == groupId } ?: return
+        if (!group.repeatable) return
+        val current = state.groupInstances[groupId] ?: listOf(0)
+        if (group.maxRepeats != null && current.size >= group.maxRepeats) return
+        val next = (current.maxOrNull() ?: -1) + 1
+        _uiState.value = state.copy(groupInstances = state.groupInstances + (groupId to (current + next)))
+    }
+
+    fun removeGroupInstance(groupId: String, instanceIndex: Int) {
+        val state = _uiState.value
+        val group = state.groups.firstOrNull { it.id == groupId } ?: return
+        if (!group.repeatable || instanceIndex == 0) return
+        val current = state.groupInstances[groupId] ?: return
+        if (current.size <= group.minRepeats) return
+        val newInstances = current.filterNot { it == instanceIndex }
+        val prefix = state.groups.filter { it.id == groupId }.flatMap { g -> state.questions.filter { it.groupId == g.id } }
+        val text = state.textAnswers.toMutableMap()
+        val media = state.mediaAnswers.toMutableMap()
+        prefix.forEach { q ->
+            text.remove(answerKey(q.id, instanceIndex))
+            media.remove(answerKey(q.id, instanceIndex))
+        }
+        _uiState.value = state.copy(groupInstances = state.groupInstances + (groupId to newInstances), textAnswers = text, mediaAnswers = media)
     }
 
     fun saveDraft(onSaved: () -> Unit) {
@@ -168,15 +229,17 @@ class FormFillViewModel(
 
     private suspend fun persistCurrentAnswers(markComplete: Boolean) {
         val state = _uiState.value
-        val answerEntities = state.questions.mapNotNull { q ->
-            val text = state.textAnswers[q.id]
-            val media = state.mediaAnswers[q.id]
+        val answerEntities = (state.textAnswers.keys + state.mediaAnswers.keys).distinct().mapNotNull { key ->
+            val (questionId, instanceIndex) = splitAnswerKey(key)
+            val text = state.textAnswers[key]
+            val media = state.mediaAnswers[key]
             if (text == null && media == null) null
             else SubmissionAnswerEntity(
                 submissionUuid = submission.clientSubmissionUuid,
-                questionId = q.id,
+                questionId = questionId,
                 valueText = text,
-                mediaReference = media
+                mediaReference = media,
+                groupInstanceIndex = instanceIndex
             )
         }
         if (markComplete) {

@@ -22,5 +22,6 @@ data class QuestionEntity(
     val relevanceExpression: String?,
     val calculationExpression: String?,
     val defaultValue: String?,
-    val cascadeParentQuestionId: String?
+    val cascadeParentQuestionId: String?,
+    val groupId: String?
 )

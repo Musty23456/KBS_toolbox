@@ -18,9 +18,13 @@ object NetworkModule {
         val client = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor(sessionManager))
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            // Render's free tier spins the backend down after inactivity and
+            // can take 50+ seconds to wake back up on the first request, so
+            // the previous 30s timeout was cutting that off mid-wake and
+            // surfacing as "no connection" even though the server was fine.
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
 
         val baseUrl = BuildConfig.API_BASE_URL.let { if (it.endsWith("/")) it else "$it/" }

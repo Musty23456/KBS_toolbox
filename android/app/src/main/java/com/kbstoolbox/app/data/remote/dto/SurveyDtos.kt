@@ -8,6 +8,17 @@ data class ChoiceDto(
     val cascade_parent_value: String?
 )
 
+data class QuestionGroupDto(
+    val id: String,
+    val title: String,
+    val description: String?,
+    val order_index: Int,
+    val section_id: String?,
+    val repeatable: Boolean,
+    val min_repeats: Int,
+    val max_repeats: Int?
+)
+
 data class QuestionDto(
     val id: String,
     val code: String,
@@ -25,6 +36,7 @@ data class QuestionDto(
     val calculation_expression: String?,
     val default_value: String?,
     val cascade_parent_question_id: String?,
+    val group_id: String?,
     val choices: List<ChoiceDto> = emptyList()
 )
 
@@ -36,5 +48,6 @@ data class SurveyDetailDto(
     val created_at: String,
     val current_version_number: Int?,
     val current_version_id: String?,
-    val questions: List<QuestionDto> = emptyList()
+    val questions: List<QuestionDto> = emptyList(),
+    val groups: List<QuestionGroupDto> = emptyList()
 )

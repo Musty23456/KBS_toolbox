@@ -76,8 +76,8 @@ Use the same accounts seeded by the backend (`python -m app.seed`):
 
 | Role          | Email                          | Password      |
 |---------------|---------------------------------|---------------|
-| Administrator | admin@kbstoolbox.local           | ChangeMe123!  |
-| Enumerator    | enumerator@kbstoolbox.local      | ChangeMe123!  |
+| Administrator | admin@kbstoolbox.app           | ChangeMe123!  |
+| Enumerator    | enumerator@kbstoolbox.app      | ChangeMe123!  |
 
 ## How offline-first works here
 

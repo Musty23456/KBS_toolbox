@@ -3,7 +3,8 @@ package com.kbstoolbox.app.data.remote.dto
 data class AnswerDto(
     val question_id: String,
     val value_text: String?,
-    val media_reference: String?
+    val media_reference: String?,
+    val group_instance_index: Int? = null
 )
 
 data class SubmissionCreateDto(
@@ -50,4 +51,19 @@ data class SyncUploadResponseDto(
 data class SyncDownloadResponseDto(
     val surveys: List<SurveyDetailDto>,
     val server_time: String
+)
+
+
+data class MediaUploadResponseDto(
+    val id: String,
+    val url: String,
+    val kind: String,
+    val size_bytes: Long
+)
+
+
+data class DeviceHeartbeatDto(
+    val device_id: String,
+    val app_version: String?,
+    val platform: String = "ANDROID"
 )
