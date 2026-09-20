@@ -17,14 +17,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # --- Minimal in-process rate limiting (per client IP, sliding 60s window) ---
 # For multi-instance production deployments, replace this with a shared store
 # (e.g. Redis) behind the same interface; this in-memory version is sufficient
@@ -32,8 +24,12 @@ app.add_middleware(
 _request_log: dict[str, deque] = defaultdict(deque)
 
 
-@app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
+    # Never rate-limit CORS preflight requests — browsers send these
+    # automatically and blocking them breaks cross-origin requests entirely.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     window = _request_log[client_ip]
@@ -48,8 +44,30 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+# Order matters: middleware added last runs first (outermost). We add the
+# rate limiter first and CORS last, so CORS ends up outermost and its
+# headers are attached even to responses the rate limiter short-circuits
+# (like a 429) — otherwise the browser reports those as generic network
+# errors instead of showing the real status.
+from starlette.middleware.base import BaseHTTPMiddleware
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=rate_limit_middleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# translations.router must be included BEFORE surveys.router: both define
+# routes under /api/surveys/..., and FastAPI matches routes in registration
+# order. translations.router's static GET /api/surveys/languages would
+# otherwise be shadowed by surveys.router's GET /api/surveys/{survey_id},
+# which greedily matches "languages" as a survey id and 404s.
 app.include_router(auth.router)
 app.include_router(users.router)
+app.include_router(translations.router)
 app.include_router(surveys.router)
 app.include_router(submissions.router)
 app.include_router(reviews.router)
@@ -61,7 +79,6 @@ app.include_router(map_router.router)
 app.include_router(exports.router)
 app.include_router(analytics.router)
 app.include_router(audit.router)
-app.include_router(translations.router)
 
 
 @app.on_event("startup")
