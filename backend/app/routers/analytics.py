@@ -8,7 +8,7 @@ from app.database import get_db
 from app.dependencies import require_roles
 from app.models.question import Question
 from app.models.submission import Submission, SubmissionStatus
-from app.models.survey import Survey, SurveyStatus
+from app.models.survey import Survey, SurveyStatus, SurveyVersion
 from app.models.user import RoleName, User
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -86,7 +86,21 @@ def question_statistics(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
 ):
-    questions = db.query(Question).filter(Question.survey_id == survey_id).order_by(Question.order_index.asc()).all()
+    # Question belongs to a survey VERSION, not directly to a survey, so we
+    # go through the survey's current version to find its live questions.
+    current_version = (
+        db.query(SurveyVersion)
+        .filter(SurveyVersion.survey_id == survey_id, SurveyVersion.is_current.is_(True))
+        .first()
+    )
+    questions = (
+        db.query(Question)
+        .filter(Question.survey_version_id == current_version.id)
+        .order_by(Question.order_index.asc())
+        .all()
+        if current_version
+        else []
+    )
     submissions = _filtered_query(db, survey_id, None, None).all()
     answer_map = {s.id: {a.question_id: a for a in s.answers} for s in submissions}
     selected = [q for q in questions if not question_id or q.id == question_id]
