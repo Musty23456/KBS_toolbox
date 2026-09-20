@@ -1,5 +1,4 @@
 package com.kbstoolbox.app
-
 import com.google.common.truth.Truth.assertThat
 import com.kbstoolbox.app.data.local.entity.QuestionEntity
 import com.kbstoolbox.app.expressions.AnswerValidator
@@ -36,8 +35,10 @@ class AnswerValidatorTest {
         relevanceExpression = relevance,
         calculationExpression = null,
         defaultValue = null,
-        cascadeParentQuestionId = null
+        cascadeParentQuestionId = null,
+        groupId = null
     )
+    
 
     @Test
     fun `required field missing produces an issue`() {
