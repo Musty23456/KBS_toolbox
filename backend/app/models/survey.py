@@ -67,6 +67,7 @@ class SurveyVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     survey = relationship("Survey", back_populates="versions")
     sections = relationship("SurveySection", back_populates="survey_version", order_by="SurveySection.order_index", cascade="all, delete-orphan")
+    groups = relationship("QuestionGroup", back_populates="survey_version", order_by="QuestionGroup.order_index", cascade="all, delete-orphan")
     questions = relationship(
         "Question", back_populates="survey_version", order_by="Question.order_index", cascade="all, delete-orphan"
     )
