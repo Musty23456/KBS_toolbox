@@ -1,5 +1,5 @@
 package com.kbstoolbox.app.ui.navigation
-
+import com.kbstoolbox.app.ui.about.AboutScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -89,6 +89,13 @@ fun KbsToolboxNavHost() {
             SubmissionsScreen()
         }
 
+        composable(Routes.ABOUT) {
+    AboutScreen(
+        onBack = {
+            navController.popBackStack()
+        }
+    )
+        }
         composable(Routes.FORM_FILL) { backStackEntry ->
             val surveyId = backStackEntry.arguments?.getString("surveyId") ?: return@composable
             val rawSubmissionUuid = backStackEntry.arguments?.getString("submissionUuid") ?: "new"
