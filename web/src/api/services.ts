@@ -170,8 +170,44 @@ export const translationsApi = {
   },
 };
 
-export const auditApi = {
-  async summary(filters: {date_from?: string; date_to?: string} = {}) { const { data } = await apiClient.get("/api/audit/summary", { params: filters }); return data; },
-  async logs(filters: {action?: string; entity_type?: string; actor_id?: string; search?: string; date_from?: string; date_to?: string; page?: number; page_size?: number} = {}) { const { data } = await apiClient.get("/api/audit/logs", { params: filters }); return data; },
-  async filters() { const { data } = await apiClient.get("/api/audit/filters"); return data; },
+export const authApi = {
+  async register(payload: { full_name: string; email: string; password: string }): Promise<UserAccount> {
+    const { data } = await apiClient.post("/api/auth/register", payload);
+    return data;
+  },
+
+  async login(email: string, password: string) {
+    const { data } = await apiClient.post("/api/auth/login-json", { email, password });
+    setStoredToken(data.access_token);
+    return data;
+  },
+
+  async logout() {
+    try {
+      await apiClient.post("/api/auth/logout");
+    } finally {
+      setStoredToken(null);
+    }
+  },
+
+  async me(): Promise<UserAccount> {
+    const { data } = await apiClient.get("/api/auth/me");
+    return data;
+  },
+
+  // SAKA SU NAN
+  async forgotPassword(email: string) {
+    const { data } = await apiClient.post("/api/auth/forgot-password", {
+      email,
+    });
+    return data;
+  },
+
+  async resetPassword(token: string, newPassword: string) {
+    const { data } = await apiClient.post("/api/auth/reset-password", {
+      token,
+      new_password: newPassword,
+    });
+    return data;
+  },
 };
