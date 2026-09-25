@@ -8,6 +8,7 @@ object Routes {
     const val SURVEY_LIST = "surveys"
     const val SUBMISSIONS = "submissions"
     const val FORM_FILL = "form_fill/{surveyId}/{submissionUuid}"
+    const val ABOUT = "about"
 
     fun formFill(surveyId: String, submissionUuid: String) =
         "form_fill/$surveyId/${submissionUuid.ifBlank { "new" }}"
