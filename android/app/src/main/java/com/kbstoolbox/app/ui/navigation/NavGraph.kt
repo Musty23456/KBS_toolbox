@@ -71,6 +71,7 @@ fun KbsToolboxNavHost() {
             DashboardScreen(
                 onOpenSurveys = { navController.navigate(Routes.SURVEY_LIST) },
                 onOpenSubmissions = { navController.navigate(Routes.SUBMISSIONS) },
+                onOpenAbout = { navController.navigate(Routes.ABOUT) },
                 onLogout = {
                     coroutineScope.launch {
                         ServiceLocator.authRepository(context).logout()
@@ -78,23 +79,6 @@ fun KbsToolboxNavHost() {
                 }
             )
         }
-
-        DashboardScreen(
-    onOpenSurveys = {
-        navController.navigate(Routes.SURVEY_LIST)
-    },
-    onOpenSubmissions = {
-        navController.navigate(Routes.SUBMISSIONS)
-    },
-    onOpenAbout = {
-        navController.navigate(Routes.ABOUT)
-    },
-    onLogout = {
-        coroutineScope.launch {
-            ServiceLocator.authRepository(context).logout()
-        }
-    }
-)
         composable(Routes.SURVEY_LIST) {
             SurveyListScreen(onSurveySelected = { surveyId, _ ->
                 navController.navigate(Routes.formFill(surveyId, ""))
