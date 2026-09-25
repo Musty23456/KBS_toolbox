@@ -114,3 +114,151 @@ def logout(token: str = Depends(oauth2_scheme), current_user: User = Depends(get
 @router.get("/me", response_model=UserOut)
 def read_current_user(current_user: User = Depends(get_current_user)):
     return current_user
+@router.post("/forgot-password")
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Starts the password reset flow.
+
+    The response is intentionally generic so that attackers cannot
+    discover whether an email address exists in the system.
+    """
+    generic_response = {
+        "message": "If an account with that email exists, a password reset link has been sent."
+    }
+
+    user = db.query(User).filter(User.email == payload.email).first()
+
+    if not user or not user.is_active:
+        return generic_response
+
+    now = datetime.now(timezone.utc)
+
+    # Invalidate previous unused reset tokens for this user.
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id,
+        PasswordResetToken.used_at.is_(None),
+    ).update(
+        {"used_at": now},
+        synchronize_session=False,
+    )
+
+    # Generate a secure random token.
+    raw_token = secrets.token_urlsafe(32)
+
+    # Store only the SHA-256 hash in the database.
+    token_hash = hashlib.sha256(
+        raw_token.encode("utf-8")
+    ).hexdigest()
+
+    reset_token = PasswordResetToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=now + timedelta(
+            minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+        ),
+    )
+
+    db.add(reset_token)
+    db.commit()
+
+    reset_url = (
+        f"{settings.WEB_APP_URL.rstrip('/')}"
+        f"/reset-password?token={quote(raw_token, safe='')}"
+    )
+
+    # Email sending will be connected in the next step.
+    # For now, the reset URL is generated securely.
+    #
+    # send_password_reset_email(
+    #     to_email=user.email,
+    #     full_name=user.full_name,
+    #     reset_url=reset_url,
+    # )
+
+    log_action(
+        db,
+        user.id,
+        "PASSWORD_RESET_REQUESTED",
+        "User",
+        user.id,
+    )
+
+    return generic_response
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Resets a user's password using a valid, unused, non-expired token.
+    """
+
+    token_hash = hashlib.sha256(
+        payload.token.encode("utf-8")
+    ).hexdigest()
+
+    reset_token = (
+        db.query(PasswordResetToken)
+        .filter(PasswordResetToken.token_hash == token_hash)
+        .first()
+    )
+
+    if not reset_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
+
+    if reset_token.used_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
+
+    now = datetime.now(timezone.utc)
+
+    expires_at = reset_token.expires_at
+
+    # SQLite may return timezone-naive datetimes.
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at <= now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
+
+    user = db.query(User).filter(User.id == reset_token.user_id).first()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
+
+    # Hash the new password using the same password system
+    # already used by registration and login.
+    user.hashed_password = hash_password(payload.new_password)
+
+    # Make the reset token one-time-use.
+    reset_token.used_at = now
+
+    db.commit()
+
+    log_action(
+        db,
+        user.id,
+        "PASSWORD_RESET_COMPLETED",
+        "User",
+        user.id,
+    )
+
+    return {
+        "message": "Password reset successful. You can now log in."
+    }
