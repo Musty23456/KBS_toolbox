@@ -16,7 +16,7 @@ on:
       apiBaseUrl:
         description: "Backend API base URL to bake into this build"
         required: false
-        default: "https://api.example.com"
+        default: "https://kbs-toolbox.onrender.com"
 
 jobs:
   build:
@@ -64,7 +64,7 @@ jobs:
         working-directory: android
         run: >
           gradle assembleDebug --stacktrace
-          -PapiBaseUrl=${{ github.event.inputs.apiBaseUrl || 'http://10.0.2.2:8000' }}
+          -PapiBaseUrl=${{ github.event.inputs.apiBaseUrl || 'https://kbs-toolbox.onrender.com' }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
