@@ -26,7 +26,16 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          
+          <Route<Route
+  path="/forgot-password"
+  element={<ForgotPasswordPage />}
+/>
+
+<Route
+  path="/reset-password"
+  element={<ResetPasswordPage />}
+/> path="/register" element={<RegisterPage />} />
 
           <Route
             element={
