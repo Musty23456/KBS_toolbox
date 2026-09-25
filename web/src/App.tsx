@@ -45,10 +45,30 @@ export default function App() {
             />
             <Route path="/surveys/:surveyId" element={<SurveyBuilderPage />} />
             <Route path="/surveys/:surveyId/fill" element={<FillSurveyPage />} />
-            <Route path="/map" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><MapPage /></ProtectedRoute>} />
-            <Route path="/exports" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><ExportPage /></ProtectedRoute>} />
-            <Route path="/exports" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><ExportPage /></ProtectedRoute>} />
-            <Route path="/translations" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><TranslationsPage /></ProtectedRoute>} />
+            <Route
+              path="/map"
+              element={
+                <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
+                  <MapPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/exports"
+              element={
+                <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
+                  <ExportPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/translations"
+              element={
+                <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
+                  <TranslationsPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/submissions"
               element={
@@ -73,7 +93,15 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/audit" element={<ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}><AuditPage /></ProtectedRoute>} />
+            <Route
+              path="/audit"
+              element={
+                <ProtectedRoute allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}>
+                  <AuditPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/about" element={<AboutPage />} />
             <Route
               path="/users"
               element={
@@ -90,4 +118,3 @@ export default function App() {
     </BrowserRouter>
   );
 }
-<Route path="/about" element={<AboutPage />} />
