@@ -30,7 +30,12 @@ import com.kbstoolbox.app.ui.theme.Ochre
 import com.kbstoolbox.app.util.ViewModelFactory
 
 @Composable
-fun DashboardScreen(onOpenSurveys: () -> Unit, onOpenSubmissions: () -> Unit, onLogout: () -> Unit) {
+fun DashboardScreen(
+    onOpenSurveys: () -> Unit,
+    onOpenSubmissions: () -> Unit,
+    onOpenAbout: () -> Unit,
+    onLogout: () -> Unit
+)
     val context = LocalContext.current
     val viewModel: DashboardViewModel = viewModel(
         factory = ViewModelFactory {
@@ -111,6 +116,14 @@ fun DashboardScreen(onOpenSurveys: () -> Unit, onOpenSubmissions: () -> Unit, on
                 Text("Fill a survey")
             }
 
+            Button(
+    onClick = onOpenAbout,
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(top = 12.dp)
+) {
+    Text("About KBS Toolbox")
+            }
             Button(
                 onClick = onOpenSubmissions,
                 modifier = Modifier
