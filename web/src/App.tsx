@@ -16,6 +16,7 @@ import { ExportPage } from "./pages/exports/ExportPage";
 import { TranslationsPage } from "./pages/translations/TranslationsPage";
 import { AuditPage } from "./pages/audit/AuditPage";
 import { FillSurveyPage } from "./pages/surveys/FillSurveyPage";
+import { AboutPage } from "./pages/AboutPage";
 
 export default function App() {
   return (
