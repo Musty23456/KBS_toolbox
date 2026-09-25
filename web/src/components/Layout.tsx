@@ -59,6 +59,12 @@ export function Layout() {
               Enumerators &amp; staff
             </NavLink>
           )}
+          <NavLink
+  to="/about"
+  className={({ isActive }) => (isActive ? "active" : "")}
+>
+  About
+</NavLink>
         </nav>
         <div className="sidebar-footer">
           <div className="who">{user?.full_name}</div>
