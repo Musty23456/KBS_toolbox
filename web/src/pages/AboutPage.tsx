@@ -12,7 +12,7 @@ export function AboutPage() {
         <h2>Project Creator</h2>
 
         <img
-          src="/images/mustapha-salisu.jpg"
+          src="/images/mustapha_salisu.png"
           alt="Mustapha Salisu"
           style={{
             width: 160,
@@ -33,7 +33,7 @@ export function AboutPage() {
         <h2>Special Appreciation</h2>
 
         <img
-          src="/images/abubakar-suraj.jpg"
+          src="/images/abubakar_suraj.png"
           alt="Abubakar Suraj"
           style={{
             width: 160,
