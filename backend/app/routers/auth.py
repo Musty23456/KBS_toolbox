@@ -12,7 +12,14 @@ from app.database import get_db
 from app.dependencies import get_current_user, oauth2_scheme
 from app.models.token import RevokedToken
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.models.password_reset import PasswordResetToken
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+)
 from app.schemas.user import UserOut
 from app.security import (
     TokenError,
