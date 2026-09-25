@@ -24,3 +24,8 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     submissions = relationship("Submission", back_populates="submitted_by", foreign_keys="Submission.submitted_by_id")
     audit_logs = relationship("AuditLog", back_populates="actor")
+    password_reset_tokens = relationship(
+        "PasswordResetToken",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
