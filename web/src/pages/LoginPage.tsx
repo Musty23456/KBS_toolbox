@@ -60,6 +60,16 @@ export function LoginPage() {
               autoComplete="current-password"
             />
           </div>
+          <div
+  style={{
+    textAlign: "right",
+    marginBottom: 16,
+  }}
+>
+  <Link to="/forgot-password">
+    Forgot password?
+  </Link>
+</div>
 
           <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ width: "100%" }}>
             {isSubmitting ? "Signing in…" : "Sign in"}
