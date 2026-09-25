@@ -30,7 +30,7 @@ from app.security import (
     verify_password,
 )
 from app.services.audit import log_action
-
+from app.services.email import send_password_reset_email
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
 
@@ -169,14 +169,19 @@ def forgot_password(
         f"/reset-password?token={quote(raw_token, safe='')}"
     )
 
-    # Email sending will be connected in the next step.
-    # For now, the reset URL is generated securely.
-    #
-    # send_password_reset_email(
-    #     to_email=user.email,
-    #     full_name=user.full_name,
-    #     reset_url=reset_url,
-    # )
+        try:
+        send_password_reset_email(
+            to_email=user.email,
+            full_name=user.full_name,
+            reset_url=reset_url,
+        )
+    except Exception:
+        # Do not expose SMTP errors or account existence to the client.
+        # The token is removed if the email could not be sent.
+        db.delete(reset_token)
+        db.commit()
+
+        return generic_response
 
     log_action(
         db,
