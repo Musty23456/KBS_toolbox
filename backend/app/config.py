@@ -30,7 +30,18 @@ class Settings(BaseSettings):
     SEED_DEMO_DATA: bool = True
     DEMO_ADMIN_EMAIL: str = "admin@kbstoolbox.app"
     DEMO_ADMIN_PASSWORD: str = "ChangeMe123!"
+    
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
 
+    SMTP_USE_TLS: bool = True
+
+    WEB_APP_URL: str = "http://localhost:5173"
+
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()]
