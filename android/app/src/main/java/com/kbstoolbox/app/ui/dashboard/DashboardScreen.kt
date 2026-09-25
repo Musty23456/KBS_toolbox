@@ -35,7 +35,7 @@ fun DashboardScreen(
     onOpenSubmissions: () -> Unit,
     onOpenAbout: () -> Unit,
     onLogout: () -> Unit
-)
+) {
     val context = LocalContext.current
     val viewModel: DashboardViewModel = viewModel(
         factory = ViewModelFactory {
