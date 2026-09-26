@@ -22,7 +22,6 @@ from app.schemas.auth import (
 )
 from app.schemas.user import UserOut
 from app.security import (
-    TokenError,
     create_access_token,
     create_refresh_token,
     hash_password,
@@ -204,7 +203,7 @@ def logout(
     jti = payload.get("jti")
     exp = payload.get("exp")
 
-    if jti:
+    if jti and exp:
         revoked = RevokedToken(
             jti=jti,
             expires_at=datetime.fromtimestamp(
@@ -276,7 +275,7 @@ def forgot_password(
     # Generate a cryptographically secure random token.
     raw_token = secrets.token_urlsafe(32)
 
-    # Store only the SHA-256 hash.
+    # Store only the SHA-256 hash in the database.
     token_hash = hashlib.sha256(
         raw_token.encode("utf-8")
     ).hexdigest()
@@ -303,9 +302,17 @@ def forgot_password(
             full_name=user.full_name,
             reset_url=reset_url,
         )
-    except Exception:
-        # Do not expose SMTP errors.
-        # Delete the token if email delivery failed.
+
+    except Exception as exc:
+        # Log the real SMTP error in Render Logs.
+        # Never expose it to the user.
+        print(
+            f"PASSWORD RESET EMAIL ERROR: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+
+        # Remove the token because the email was not sent.
         db.delete(reset_token)
         db.commit()
 
@@ -360,7 +367,7 @@ def reset_password(
 
     expires_at = reset_token.expires_at
 
-    # SQLite can return timezone-naive datetimes.
+    # Some databases return timezone-naive datetimes.
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(
             tzinfo=timezone.utc
@@ -390,7 +397,7 @@ def reset_password(
         payload.new_password
     )
 
-    # Make the reset token one-time-use.
+    # Make the token one-time-use.
     reset_token.used_at = now
 
     db.commit()
