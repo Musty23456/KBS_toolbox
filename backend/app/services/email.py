@@ -17,8 +17,8 @@ def send_password_reset_email(
     Send a password-reset email using the Resend HTTPS API.
 
     The raw password-reset token is never logged or stored here.
-    Resend is accessed over HTTPS, so this does not depend on SMTP
-    connectivity from the Render server.
+    Resend is accessed over HTTPS, so this does not depend on
+    SMTP connectivity from the Render server.
     """
 
     if not settings.RESEND_API_KEY:
@@ -166,6 +166,7 @@ KBS Toolbox
             "Authorization": f"Bearer {settings.RESEND_API_KEY}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "User-Agent": "KBS-Toolbox/1.0",
         },
         method="POST",
     )
