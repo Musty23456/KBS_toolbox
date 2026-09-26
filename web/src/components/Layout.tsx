@@ -1,11 +1,39 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { authApi } from "../api/services";
 
 export function Layout() {
   const { user, logout } = useAuth();
 
   const canManageSurveys = user?.role === "ADMINISTRATOR" || user?.role === "SUPERVISOR";
   const canManageUsers = user?.role === "ADMINISTRATOR" || user?.role === "SUPERVISOR";
+  const isAdmin = user?.role === "ADMINISTRATOR";
+
+  const [pendingResetCount, setPendingResetCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    let cancelled = false;
+
+    async function loadPendingCount() {
+      try {
+        const requests = await authApi.listPasswordResetRequests("PENDING");
+        if (!cancelled) setPendingResetCount(requests.length);
+      } catch {
+        // Non-critical: the badge just won't update this cycle.
+      }
+    }
+
+    loadPendingCount();
+    const interval = setInterval(loadPendingCount, 60000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isAdmin]);
 
   return (
     <div className="app-shell">
@@ -57,6 +85,32 @@ export function Layout() {
           {canManageUsers && (
             <NavLink to="/users" className={({ isActive }) => (isActive ? "active" : "")}>
               Enumerators &amp; staff
+            </NavLink>
+          )}
+          {isAdmin && (
+            <NavLink
+              to="/password-reset-requests"
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
+              Password reset requests
+              {pendingResetCount > 0 && (
+                <span
+                  style={{
+                    marginLeft: 8,
+                    display: "inline-block",
+                    minWidth: 18,
+                    padding: "0 5px",
+                    borderRadius: 9,
+                    background: "#dc2626",
+                    color: "#fff",
+                    fontSize: 12,
+                    textAlign: "center",
+                    lineHeight: "18px",
+                  }}
+                >
+                  {pendingResetCount}
+                </span>
+              )}
             </NavLink>
           )}
           <NavLink
