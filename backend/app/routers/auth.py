@@ -1,7 +1,4 @@
-from datetime import datetime, timedelta, timezone
-import hashlib
-import secrets
-from urllib.parse import quote
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -9,15 +6,16 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.dependencies import get_current_user, oauth2_scheme
+from app.dependencies import get_current_user, oauth2_scheme, require_roles
 from app.models.token import RevokedToken
-from app.models.user import User
-from app.models.password_reset import PasswordResetToken
+from app.models.user import RoleName, User
+from app.models.password_reset import PasswordResetRequest, PasswordResetRequestStatus
 from app.schemas.auth import (
+    AdminResolvePasswordResetRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    PasswordResetRequestOut,
     RegisterRequest,
-    ResetPasswordRequest,
     TokenResponse,
 )
 from app.schemas.user import UserOut
@@ -29,7 +27,6 @@ from app.security import (
     verify_password,
 )
 from app.services.audit import log_action
-from app.services.email import send_password_reset_email
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -233,24 +230,27 @@ def read_current_user(
     return current_user
 
 
+GENERIC_FORGOT_PASSWORD_RESPONSE = {
+    "message": (
+        "If an account with that email exists, an administrator has "
+        "been notified and will get in touch with a new password."
+    )
+}
+
+
 @router.post("/forgot-password")
 def forgot_password(
     payload: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
     """
-    Starts the password reset flow.
+    Records a "forgot password" request for an administrator to handle.
 
-    The response is intentionally generic so that an attacker
-    cannot discover whether an email address exists.
+    There is no email or token involved: an administrator sees the request
+    on the dashboard and hands the user a new password directly (in person,
+    by phone, etc). The response is intentionally generic so that an
+    attacker cannot discover whether an email address exists.
     """
-
-    generic_response = {
-        "message": (
-            "If an account with that email exists, "
-            "a password reset link has been sent."
-        )
-    }
 
     user = (
         db.query(User)
@@ -259,160 +259,153 @@ def forgot_password(
     )
 
     if not user or not user.is_active:
-        return generic_response
+        return GENERIC_FORGOT_PASSWORD_RESPONSE
 
-    now = datetime.now(timezone.utc)
-
-    # Invalidate previous unused reset tokens.
-    db.query(PasswordResetToken).filter(
-        PasswordResetToken.user_id == user.id,
-        PasswordResetToken.used_at.is_(None),
-    ).update(
-        {"used_at": now},
-        synchronize_session=False,
-    )
-
-    # Generate a cryptographically secure random token.
-    raw_token = secrets.token_urlsafe(32)
-
-    # Store only the SHA-256 hash in the database.
-    token_hash = hashlib.sha256(
-        raw_token.encode("utf-8")
-    ).hexdigest()
-
-    reset_token = PasswordResetToken(
-        user_id=user.id,
-        token_hash=token_hash,
-        expires_at=now + timedelta(
-            minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
-        ),
-    )
-
-    db.add(reset_token)
-    db.commit()
-
-    reset_url = (
-        f"{settings.WEB_APP_URL.rstrip('/')}"
-        f"/reset-password?token={quote(raw_token, safe='')}"
-    )
-
-    try:
-        send_password_reset_email(
-            to_email=user.email,
-            full_name=user.full_name,
-            reset_url=reset_url,
-        )
-
-    except Exception as exc:
-        # Log the real SMTP error in Render Logs.
-        # Never expose it to the user.
-        print(
-            f"PASSWORD RESET EMAIL ERROR: "
-            f"{type(exc).__name__}: {exc}",
-            flush=True,
-        )
-
-        # Remove the token because the email was not sent.
-        db.delete(reset_token)
-        db.commit()
-
-        return generic_response
-
-    log_action(
-        db,
-        user.id,
-        "PASSWORD_RESET_REQUESTED",
-        "User",
-        user.id,
-    )
-
-    return generic_response
-
-
-@router.post("/reset-password")
-def reset_password(
-    payload: ResetPasswordRequest,
-    db: Session = Depends(get_db),
-):
-    """
-    Resets a user's password using a valid,
-    unused and non-expired reset token.
-    """
-
-    token_hash = hashlib.sha256(
-        payload.token.encode("utf-8")
-    ).hexdigest()
-
-    reset_token = (
-        db.query(PasswordResetToken)
+    # Avoid piling up duplicate pending requests if the user submits the
+    # form more than once before an admin has gotten to it.
+    existing_pending = (
+        db.query(PasswordResetRequest)
         .filter(
-            PasswordResetToken.token_hash == token_hash
+            PasswordResetRequest.user_id == user.id,
+            PasswordResetRequest.status == PasswordResetRequestStatus.PENDING,
         )
         .first()
     )
 
-    if not reset_token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+    if not existing_pending:
+        reset_request = PasswordResetRequest(
+            user_id=user.id,
+            status=PasswordResetRequestStatus.PENDING,
         )
 
-    if reset_token.used_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+        db.add(reset_request)
+        db.commit()
+
+        log_action(
+            db,
+            user.id,
+            "PASSWORD_RESET_REQUESTED",
+            "User",
+            user.id,
         )
 
-    now = datetime.now(timezone.utc)
+    return GENERIC_FORGOT_PASSWORD_RESPONSE
 
-    expires_at = reset_token.expires_at
 
-    # Some databases return timezone-naive datetimes.
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(
-            tzinfo=timezone.utc
+@router.get(
+    "/password-reset-requests",
+    response_model=list[PasswordResetRequestOut],
+)
+def list_password_reset_requests(
+    status_filter: PasswordResetRequestStatus | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR)),
+):
+    """
+    Lists "forgot password" requests for administrators to act on.
+    Defaults to pending requests only; pass ?status_filter=RESOLVED to see
+    the history of who was already helped.
+    """
+
+    query = db.query(PasswordResetRequest)
+
+    if status_filter is not None:
+        query = query.filter(PasswordResetRequest.status == status_filter)
+    else:
+        query = query.filter(
+            PasswordResetRequest.status == PasswordResetRequestStatus.PENDING
         )
 
-    if expires_at <= now:
+    requests = query.order_by(PasswordResetRequest.created_at.desc()).all()
+
+    return [
+        PasswordResetRequestOut(
+            id=r.id,
+            user_id=r.user_id,
+            user_full_name=r.user.full_name,
+            user_email=r.user.email,
+            status=r.status,
+            created_at=r.created_at,
+            resolved_at=r.resolved_at,
+            resolved_by_id=r.resolved_by_id,
+            resolved_by_name=r.resolved_by.full_name if r.resolved_by else None,
+        )
+        for r in requests
+    ]
+
+
+@router.post(
+    "/password-reset-requests/{request_id}/resolve",
+    response_model=PasswordResetRequestOut,
+)
+def resolve_password_reset_request(
+    request_id: str,
+    payload: AdminResolvePasswordResetRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR)),
+):
+    """
+    Sets the user's password to the value the administrator chose, and
+    marks the request as resolved. The administrator is responsible for
+    communicating the new password to the user themselves.
+    """
+
+    reset_request = (
+        db.query(PasswordResetRequest)
+        .filter(PasswordResetRequest.id == request_id)
+        .first()
+    )
+
+    if not reset_request:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Password reset request not found",
+        )
+
+    if reset_request.status == PasswordResetRequestStatus.RESOLVED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+            detail="This request has already been resolved",
         )
 
     user = (
         db.query(User)
-        .filter(User.id == reset_token.user_id)
+        .filter(User.id == reset_request.user_id)
         .first()
     )
 
-    if not user or not user.is_active:
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
         )
 
-    # Hash the new password using the existing
-    # password hashing system.
-    user.hashed_password = hash_password(
-        payload.new_password
-    )
+    user.hashed_password = hash_password(payload.new_password)
 
-    # Make the token one-time-use.
-    reset_token.used_at = now
+    now = datetime.now(timezone.utc)
+    reset_request.status = PasswordResetRequestStatus.RESOLVED
+    reset_request.resolved_at = now
+    reset_request.resolved_by_id = current_user.id
 
     db.commit()
+    db.refresh(reset_request)
 
     log_action(
         db,
-        user.id,
-        "PASSWORD_RESET_COMPLETED",
+        current_user.id,
+        "PASSWORD_RESET_RESOLVED",
         "User",
         user.id,
     )
 
-    return {
-        "message": (
-            "Password reset successful. "
-            "You can now log in."
-        )
-    }
+    return PasswordResetRequestOut(
+        id=reset_request.id,
+        user_id=reset_request.user_id,
+        user_full_name=user.full_name,
+        user_email=user.email,
+        status=reset_request.status,
+        created_at=reset_request.created_at,
+        resolved_at=reset_request.resolved_at,
+        resolved_by_id=reset_request.resolved_by_id,
+        resolved_by_name=current_user.full_name,
+    )
