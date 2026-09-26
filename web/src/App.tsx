@@ -6,8 +6,6 @@ import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
-import { ResetPasswordPage } from "./pages/ResetPasswordPage";
-
 import { DashboardPage } from "./pages/DashboardPage";
 import { SurveyListPage } from "./pages/surveys/SurveyListPage";
 import { SurveyBuilderPage } from "./pages/surveys/SurveyBuilderPage";
