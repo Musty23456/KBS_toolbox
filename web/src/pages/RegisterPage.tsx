@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { extractErrorMessage } from "../api/client";
+import { markWelcomeAudioForNextVisit } from "../components/WelcomeAudio";
 
 export function RegisterPage() {
   const { register } = useAuth();
@@ -30,7 +31,8 @@ export function RegisterPage() {
     setIsSubmitting(true);
     try {
       await register(fullName, email, password);
-      navigate("/");
+markWelcomeAudioForNextVisit();
+navigate("/");
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
