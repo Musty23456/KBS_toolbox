@@ -32,8 +32,13 @@ export function ForgotPasswordPage() {
       <div className="login-panel">
         <div className="login-brand">
           KBS Toolbox
-          <small>Reset your password</small>
+          <small>Request a password reset</small>
         </div>
+
+        <p style={{ marginTop: 12, color: "#6b7280", fontSize: 14 }}>
+          Enter your account email below. An administrator will see your
+          request and get in touch with a new password.
+        </p>
 
         <form onSubmit={handleSubmit} style={{ marginTop: 24 }}>
           {message && <div className="form-success">{message}</div>}
@@ -59,7 +64,7 @@ export function ForgotPasswordPage() {
             disabled={isSubmitting}
             style={{ width: "100%" }}
           >
-            {isSubmitting ? "Sending…" : "Send reset link"}
+            {isSubmitting ? "Sending…" : "Notify an administrator"}
           </button>
         </form>
 
