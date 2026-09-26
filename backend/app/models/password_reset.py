@@ -1,21 +1,28 @@
+import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.models.base import TimestampMixin, UUIDPrimaryKeyMixin
 
 
-class PasswordResetToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """
-    Stores password-reset tokens securely.
+class PasswordResetRequestStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    RESOLVED = "RESOLVED"
 
-    The raw token is never stored in the database.
-    Only its SHA-256 hash is stored.
+
+class PasswordResetRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    Tracks a "forgot password" request so an administrator can see it in the
+    dashboard and hand the user a new password directly (in person, by
+    phone, etc). There is no self-service email/token flow: only an
+    administrator can resolve a request, by choosing the new password
+    themselves.
     """
 
-    __tablename__ = "password_reset_tokens"
+    __tablename__ = "password_reset_requests"
 
     user_id: Mapped[str] = mapped_column(
         String(36),
@@ -24,22 +31,31 @@ class PasswordResetToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
 
-    token_hash: Mapped[str] = mapped_column(
-        String(64),
-        unique=True,
-        index=True,
+    status: Mapped[PasswordResetRequestStatus] = mapped_column(
+        Enum(PasswordResetRequestStatus),
         nullable=False,
-    )
-
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
+        default=PasswordResetRequestStatus.PENDING,
         index=True,
     )
 
-    used_at: Mapped[datetime | None] = mapped_column(
+    resolved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    user = relationship("User", back_populates="password_reset_tokens")
+    resolved_by_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    user = relationship(
+        "User",
+        back_populates="password_reset_requests",
+        foreign_keys=[user_id],
+    )
+
+    resolved_by = relationship(
+        "User",
+        foreign_keys=[resolved_by_id],
+    )
