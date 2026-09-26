@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { WelcomeAudio } from "../components/WelcomeAudio";
 import { Link } from "react-router-dom";
 import { surveysApi, submissionsApi } from "../api/services";
 import type { Submission, SurveySummary } from "../api/types";
@@ -33,6 +34,7 @@ export function DashboardPage() {
 
   return (
     <div>
+      <WelcomeAudio />
       <div className="page-header">
         <div>
           <h1>Overview</h1>
