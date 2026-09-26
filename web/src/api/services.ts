@@ -68,14 +68,29 @@ export const authApi = {
     return data;
   },
 
-  async resetPassword(
-    token: string,
-    newPassword: string
-  ) {
-    const { data } = await apiClient.post(
-      "/api/auth/reset-password",
+  
+async listPasswordResetRequests(
+    statusFilter?: PasswordResetRequestStatus
+  ): Promise<PasswordResetRequestItem[]> {
+    const { data } = await apiClient.get(
+      "/api/auth/password-reset-requests",
       {
-        token,
+        params: statusFilter
+          ? { status_filter: statusFilter }
+          : undefined,
+      }
+    );
+
+    return data;
+  },
+
+  async resolvePasswordResetRequest(
+    requestId: string,
+    newPassword: string
+  ): Promise<PasswordResetRequestItem> {
+    const { data } = await apiClient.post(
+      `/api/auth/password-reset-requests/${requestId}/resolve`,
+      {
         new_password: newPassword,
       }
     );
@@ -83,7 +98,6 @@ export const authApi = {
     return data;
   },
 };
-
 
 /* =========================================================
    SURVEYS API
