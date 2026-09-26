@@ -1,3 +1,17 @@
+export type PasswordResetRequestStatus = "PENDING" | "RESOLVED";
+
+export interface PasswordResetRequestItem {
+  id: string;
+  user_id: string;
+  user_full_name: string;
+  user_email: string;
+  status: PasswordResetRequestStatus;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by_id: string | null;
+  resolved_by_name: string | null;
+}
+
 export type Role = "ADMINISTRATOR" | "SUPERVISOR" | "ENUMERATOR";
 
 export type SurveyStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
