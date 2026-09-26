@@ -170,10 +170,10 @@ def forgot_password(
     )
 
         try:
-        send_password_reset_email(
-            to_email=user.email,
-            full_name=user.full_name,
-            reset_url=reset_url,
+            send_password_reset_email(
+                to_email=user.email,
+                full_name=user.full_name,
+                reset_url=reset_url,
         )
     except Exception:
         # Do not expose SMTP errors or account existence to the client.
