@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
-
+import { PasswordResetRequestsPage } from "./pages/users/PasswordResetRequestsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
@@ -34,10 +34,7 @@ export default function App() {
             element={<ForgotPasswordPage />}
           />
 
-          <Route
-            path="/reset-password"
-            element={<ResetPasswordPage />}
-          />
+      
 
           {/* Protected application routes */}
           <Route
@@ -179,3 +176,13 @@ export default function App() {
     </BrowserRouter>
   );
 }
+         <Route
+              path="/password-reset-requests"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMINISTRATOR"]}
+                >
+                  <PasswordResetRequestsPage />
+                </ProtectedRoute>
+              }
+            />
