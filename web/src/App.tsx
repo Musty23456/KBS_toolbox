@@ -2,15 +2,17 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Layout } from "./components/Layout";
-import { PasswordResetRequestsPage } from "./pages/users/PasswordResetRequestsPage";
+
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+
 import { DashboardPage } from "./pages/DashboardPage";
 import { SurveyListPage } from "./pages/surveys/SurveyListPage";
 import { SurveyBuilderPage } from "./pages/surveys/SurveyBuilderPage";
 import { SubmissionsPage } from "./pages/submissions/SubmissionsPage";
 import { UsersPage } from "./pages/users/UsersPage";
+import { PasswordResetRequestsPage } from "./pages/users/PasswordResetRequestsPage";
 import { AnalyticsPage } from "./pages/analytics/AnalyticsPage";
 import { DevicesPage } from "./pages/devices/DevicesPage";
 import { MapPage } from "./pages/map/MapPage";
@@ -33,8 +35,6 @@ export default function App() {
             path="/forgot-password"
             element={<ForgotPasswordPage />}
           />
-
-      
 
           {/* Protected application routes */}
           <Route
@@ -164,6 +164,17 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            <Route
+              path="/password-reset-requests"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMINISTRATOR"]}
+                >
+                  <PasswordResetRequestsPage />
+                </ProtectedRoute>
+              }
+            />
           </Route>
 
           {/* Unknown routes */}
@@ -175,14 +186,4 @@ export default function App() {
       </AuthProvider>
     </BrowserRouter>
   );
-}
-         <Route
-              path="/password-reset-requests"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMINISTRATOR"]}
-                >
-                  <PasswordResetRequestsPage />
-                </ProtectedRoute>
-              }
-            />
+                }
