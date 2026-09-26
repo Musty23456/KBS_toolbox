@@ -9,16 +9,7 @@ import type {
   UserAccount,
   Device,
 } from "./types";
-import { apiClient, setStoredToken } from "./client";
-import type {
-  Role,
-  Submission,
-  SubmissionStatus,
-  SurveyDetail,
-  SurveySummary,
-  UserAccount,
-  Device,
-} from "./types";
+import { apiClient, setStoredToken } from "./client"
 
 /* =========================================================
    AUTH API
