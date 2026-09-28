@@ -25,6 +25,11 @@ class SyncRepository(
     private val submissionRepository: SubmissionRepository,
     private val deviceId: String
 ) {
+    /** Lightweight "I'm online" ping so the admin dashboard can show live presence. */
+    suspend fun sendHeartbeat() {
+        try { apiService.deviceHeartbeat(DeviceHeartbeatDto(deviceId, BuildConfig.VERSION_NAME)) } catch (_: Exception) {}
+    }
+
     suspend fun uploadPendingSubmissions(): SyncUploadOutcome {
         val pending = submissionRepository.getPendingForSync()
         if (pending.isEmpty()) {

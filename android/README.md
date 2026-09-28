@@ -111,6 +111,15 @@ Use the same accounts seeded by the backend (`python -m app.seed`):
    until then it stays `PENDING_SYNC` or `FAILED` (which is retried
    automatically), and nothing is deleted locally.
 
+## Live presence (heartbeat)
+
+While the app is on screen and the user is signed in, `MainActivity`
+sends `POST /api/devices/heartbeat` every 60 seconds (via
+`SyncRepository.sendHeartbeat()`), so the web dashboard can show who is
+online. The loop is tied to the activity lifecycle (`repeatOnLifecycle`),
+so it stops automatically in the background. Network failures are ignored.
+The 15-minute background sync (`SyncWorker`) still sends its own heartbeat.
+
 ## Design notes / deliberate simplifications
 
 - **Manual DI instead of Hilt** (`di/ServiceLocator.kt`): Hilt's
