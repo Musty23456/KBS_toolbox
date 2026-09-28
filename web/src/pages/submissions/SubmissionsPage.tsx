@@ -4,6 +4,7 @@ import type { ReviewStatus, Submission, SubmissionStatus, SurveyDetail, SurveySu
 import { isStaff, resultsSurveys } from "../../api/surveyAccess";
 import { useAuth } from "../../context/AuthContext";
 import { StatusBadge } from "../../components/StatusBadge";
+import { MediaAnswer } from "../../components/MediaAnswer";
 
 const STATUS_OPTIONS: SubmissionStatus[] = ["PENDING", "UPLOADING", "UPLOADED", "SYNCED", "FAILED"];
 const REVIEW_OPTIONS: ReviewStatus[] = ["RECEIVED", "UNDER_REVIEW", "HAS_ISSUES", "APPROVED", "REJECTED", "RESUBMIT"];
@@ -184,7 +185,7 @@ export function SubmissionsPage() {
               )}
 
               <h3 style={{ marginTop: 20 }}>Answers</h3>
-              <table className="registry-table"><tbody>{selected.answers.map((a) => <tr key={a.id}><td>{questionLabel(a.question_id)}{a.group_instance_index != null ? ` #${a.group_instance_index + 1}` : ""}</td><td>{a.value_text ?? a.media_reference ?? "—"}</td></tr>)}</tbody></table>
+              <table className="registry-table"><tbody>{selected.answers.map((a) => <tr key={a.id}><td>{questionLabel(a.question_id)}{a.group_instance_index != null ? ` #${a.group_instance_index + 1}` : ""}</td><td>{a.value_text ? a.value_text : a.media_reference ? <MediaAnswer reference={a.media_reference} /> : "—"}</td></tr>)}</tbody></table>
             </div>
           )}
         </div>
