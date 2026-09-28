@@ -94,3 +94,14 @@ build it first and report back whatever surfaces.
 - Backend migration `0004_group_instance_index` added.
 - Backend Python compilation passes in the available environment.
 - Android Gradle compile could not be executed because the uploaded project does not contain `gradle-wrapper.jar`.
+
+## Online enumerators + design update
+
+**Done:** `devices.py` compiles (`py_compile`); edited web/Android files
+were diffed against the originals to confirm the changes are additions
+only; `polish.css` braces are balanced.
+
+**Not done:** the update was not built or run (`npm run build`, Gradle, and
+the backend's dependencies were not available where it was written). Let
+GitHub Actions (Web + Android builds) and Render's deploy be the real test.
+Also confirm in the browser that the new page loads for an Administrator.

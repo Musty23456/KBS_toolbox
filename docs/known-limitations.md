@@ -41,6 +41,16 @@ is buried in a sub-directory.
 - The signature pad captures reasonably fine strokes but has not been
   tuned for very large screens/tablets.
 
+## Online enumerators (added in this update)
+
+- "Online" is based on the app being open (heartbeat every minute). An
+  enumerator whose app is closed or in the background shows as Recently
+  active for up to 30 minutes, then Offline — even if the phone has
+  internet.
+- Presence is polled (every 15 seconds), not pushed in real time.
+- Enumerators on the old APK are only seen about every 15 minutes.
+- Dark mode is still on the wishlist; the new styling is light-theme only.
+
 ## Cross-cutting
 
 - No end-to-end integration test exercises all three components together
