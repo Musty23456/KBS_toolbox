@@ -14,7 +14,65 @@ KBS Toolbox has three parts, each a complete, independent project:
 
 Each has its own README with full setup instructions. This file covers how
 the pieces fit together and how to get everything running end-to-end.
-/
+## What's new in this update
+
+**Live "Online enumerators" for Admin/Supervisor**
+
+- New web page **Online enumerators** (sidebar → *Online enumerators*).
+  It shows every active enumerator as **Online** (seen in the last 3
+  minutes), **Recently active** (last 30 minutes) or **Offline**, with
+  last-seen time, last sync, and app version.
+- The page refreshes itself every 15 seconds, and has a name/email search
+  plus one-click filters (tap the Online / Recently active / Offline cards).
+- Backend: new endpoint `GET /api/devices/online-enumerators`
+  (Administrator and Supervisor only). Nothing existing was changed — it is
+  added to `backend/app/routers/devices.py`. No database migration needed;
+  it reuses the existing `devices.last_seen_at` column.
+- Android: while the app is open and signed in, it now sends a "heartbeat"
+  every minute (`MainActivity.kt` → `SyncRepository.sendHeartbeat()`), and
+  stops when the app goes to the background. **Enumerators must install the
+  new APK for this to work** — with the old APK they only ping about every
+  15 minutes and will mostly show as Offline.
+
+**New professional design & animations (web dashboard)**
+
+- All new styling lives in one additive file, `web/src/styles/polish.css`,
+  loaded after the original `global.css`. No existing style or page logic
+  was edited.
+- Includes: animated page entrances, staggered stat cards, gradient
+  buttons with a hover shine, refined tables, soft focus rings, glass
+  login screen with animated background, branded sidebar with sliding
+  active indicator, blurred modal backdrop, custom scrollbars.
+- The sidebar is now sticky on desktop, and on phones (under 860px) it
+  shows as a scrollable menu strip — previously it was hidden completely.
+- Users with "reduce motion" enabled on their device get no animations.
+- **To undo the whole redesign:** delete `web/src/styles/polish.css` and
+  the line `import "./styles/polish.css";` in `web/src/main.tsx`.
+
+**Files changed or added in this update**
+
+| File | Change |
+|---|---|
+| `backend/app/routers/devices.py` | added `GET /api/devices/online-enumerators` |
+| `web/src/pages/devices/OnlineEnumeratorsPage.tsx` | new page |
+| `web/src/styles/polish.css` | new design/animation layer |
+| `web/src/main.tsx` | imports `polish.css` |
+| `web/src/App.tsx` | new route `/online-enumerators` |
+| `web/src/components/Layout.tsx` | new sidebar link |
+| `android/.../MainActivity.kt` | 1-minute heartbeat while app is open |
+| `android/.../data/repository/SyncRepository.kt` | new `sendHeartbeat()` |
+
+**How to deploy this update (GitHub web editor, in this order)**
+
+1. Backend first: replace `backend/app/routers/devices.py` → wait for
+   Render to redeploy.
+2. Web: add the two new files, replace `main.tsx`, `App.tsx`, `Layout.tsx`
+   → Vercel redeploys automatically.
+3. Android: replace `MainActivity.kt` and `SyncRepository.kt`, let the
+   *Android Build* workflow finish, download the new APK, and install it on
+   the enumerators' phones.
+
+
 ## Architecture
 
 ```
