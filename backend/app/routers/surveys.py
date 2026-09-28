@@ -2,19 +2,30 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.dependencies import get_current_user, require_roles
+from app.dependencies import get_current_user
 from app.models.question import Choice, Question
 from app.models.group import QuestionGroup
-from app.models.survey import Survey, SurveySection, SurveyStatus, SurveyVersion
+from app.models.survey import Survey, SurveyScope, SurveySection, SurveyStatus, SurveyVersion
 from app.models.user import RoleName, User
 from app.schemas.survey import (
+    ShareTargetOut,
     SurveyCreate,
     SurveyDetailOut,
+    SurveySharesOut,
+    SurveySharesUpdate,
     SurveySummaryOut,
     SurveyUpdate,
     SectionOut,
 )
 from app.services.audit import log_action
+from app.services.survey_access import (
+    can_archive,
+    can_create_global,
+    can_edit,
+    can_share,
+    can_view,
+    is_listed,
+)
 
 router = APIRouter(prefix="/api/surveys", tags=["surveys"])
 
@@ -40,6 +51,8 @@ def _to_detail(survey: Survey) -> SurveyDetailOut:
         groups=version.groups if version else [],
         questions=version.questions if version else [],
         assigned_enumerator_ids=[u.id for u in survey.assigned_enumerators],
+        scope=survey.scope,
+        created_by_id=survey.created_by_id,
     )
 
 
@@ -54,6 +67,8 @@ def _to_summary(survey: Survey) -> SurveySummaryOut:
         current_version_number=version.version_number if version else None,
         current_version_id=version.id if version else None,
         assigned_enumerator_ids=[u.id for u in survey.assigned_enumerators],
+        scope=survey.scope,
+        created_by_id=survey.created_by_id,
     )
 
 
@@ -65,6 +80,7 @@ def _load_survey_or_404(db: Session, survey_id: str) -> Survey:
             joinedload(Survey.versions).joinedload(SurveyVersion.sections),
             joinedload(Survey.versions).joinedload(SurveyVersion.groups),
             joinedload(Survey.assigned_enumerators),
+            joinedload(Survey.shared_with),
         )
         .filter(Survey.id == survey_id)
         .first()
@@ -72,6 +88,11 @@ def _load_survey_or_404(db: Session, survey_id: str) -> Survey:
     if not survey:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey not found")
     return survey
+
+
+def _forbid_unless(allowed: bool, detail: str = "You do not have permission to perform this action") -> None:
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 def _apply_assignments(db: Session, survey: Survey, enumerator_ids: list[str]) -> None:
@@ -151,27 +172,40 @@ def list_surveys(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Survey).options(joinedload(Survey.versions), joinedload(Survey.assigned_enumerators))
+    query = db.query(Survey).options(
+        joinedload(Survey.versions), joinedload(Survey.assigned_enumerators), joinedload(Survey.shared_with)
+    )
     if status_filter:
         query = query.filter(Survey.status == status_filter)
     surveys = query.order_by(Survey.created_at.desc()).all()
 
-    if current_user.role == RoleName.ENUMERATOR:
-        # An unassigned survey (no one restricted it) stays open to every
-        # enumerator; an assigned survey only shows for the enumerators
-        # picked for it.
-        surveys = [
-            s
-            for s in surveys
-            if not s.assigned_enumerators or current_user.id in {u.id for u in s.assigned_enumerators}
-        ]
+    # Global surveys (respecting enumerator assignments) plus the caller's own
+    # personal surveys. Other people's personal surveys are never listed.
+    surveys = [s for s in surveys if is_listed(current_user, s)]
 
     return [_to_summary(s) for s in surveys]
+
+
+@router.get("/share-targets", response_model=list[ShareTargetOut])
+def list_share_targets(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Active enumerators (other than the caller) a personal survey can be shared with."""
+    return (
+        db.query(User)
+        .filter(User.is_active.is_(True), User.role == RoleName.ENUMERATOR, User.id != current_user.id)
+        .order_by(User.full_name)
+        .all()
+    )
 
 
 @router.get("/{survey_id}", response_model=SurveyDetailOut)
 def get_survey(survey_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     survey = _load_survey_or_404(db, survey_id)
+    if not can_view(current_user, survey):
+        # 404 rather than 403 so private survey ids are not revealed.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey not found")
     return _to_detail(survey)
 
 
@@ -179,13 +213,26 @@ def get_survey(survey_id: str, db: Session = Depends(get_db), current_user: User
 def create_survey(
     payload: SurveyCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
-    survey = Survey(title=payload.title, description=payload.description, created_by_id=current_user.id)
+    """Any signed-in user can create a PERSONAL survey; only administrators can create GLOBAL ones."""
+    scope = payload.scope or (
+        SurveyScope.GLOBAL.value if can_create_global(current_user) else SurveyScope.PERSONAL.value
+    )
+    if scope == SurveyScope.GLOBAL.value:
+        _forbid_unless(can_create_global(current_user), "Only administrators can create global surveys")
+
+    survey = Survey(
+        title=payload.title,
+        description=payload.description,
+        created_by_id=current_user.id,
+        scope=scope,
+    )
     db.add(survey)
     db.flush()
 
-    _apply_assignments(db, survey, payload.assigned_enumerator_ids)
+    if scope == SurveyScope.GLOBAL.value:
+        _apply_assignments(db, survey, payload.assigned_enumerator_ids)
 
     version = SurveyVersion(survey_id=survey.id, version_number=1, is_current=True)
     db.add(version)
@@ -206,7 +253,7 @@ def update_survey(
     survey_id: str,
     payload: SurveyUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Editing title/description only patches the survey. Editing the question
@@ -215,13 +262,14 @@ def update_survey(
     collected against.
     """
     survey = _load_survey_or_404(db, survey_id)
+    _forbid_unless(can_view(current_user, survey) and can_edit(current_user, survey))
 
     if payload.title is not None:
         survey.title = payload.title
     if payload.description is not None:
         survey.description = payload.description
 
-    if payload.assigned_enumerator_ids is not None:
+    if payload.assigned_enumerator_ids is not None and survey.scope == SurveyScope.GLOBAL.value:
         _apply_assignments(db, survey, payload.assigned_enumerator_ids)
 
     if payload.questions is not None:
@@ -249,9 +297,10 @@ def update_survey(
 def publish_survey(
     survey_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
     survey = _load_survey_or_404(db, survey_id)
+    _forbid_unless(can_view(current_user, survey) and can_edit(current_user, survey))
     if not survey.versions:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add at least one question before publishing")
     survey.status = SurveyStatus.PUBLISHED
@@ -264,9 +313,10 @@ def publish_survey(
 def unpublish_survey(
     survey_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
     survey = _load_survey_or_404(db, survey_id)
+    _forbid_unless(can_view(current_user, survey) and can_edit(current_user, survey))
     survey.status = SurveyStatus.DRAFT
     db.commit()
     log_action(db, current_user.id, "SURVEY_UNPUBLISHED", "Survey", survey.id)
@@ -277,11 +327,49 @@ def unpublish_survey(
 def archive_survey(
     survey_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR)),
+    current_user: User = Depends(get_current_user),
 ):
     """Archives rather than hard-deletes, preserving submission history."""
     survey = _load_survey_or_404(db, survey_id)
+    _forbid_unless(can_view(current_user, survey) and can_archive(current_user, survey))
     survey.status = SurveyStatus.ARCHIVED
     db.commit()
     log_action(db, current_user.id, "SURVEY_ARCHIVED", "Survey", survey.id)
     return None
+
+
+@router.get("/{survey_id}/shares", response_model=SurveySharesOut)
+def get_survey_shares(
+    survey_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    survey = _load_survey_or_404(db, survey_id)
+    _forbid_unless(can_share(current_user, survey), "Only the owner can manage sharing for a personal survey")
+    return SurveySharesOut(survey_id=survey.id, user_ids=[u.id for u in survey.shared_with])
+
+
+@router.put("/{survey_id}/shares", response_model=SurveySharesOut)
+def set_survey_shares(
+    survey_id: str,
+    payload: SurveySharesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Replace the list of people a personal survey is shared with. Send [] to stop sharing."""
+    survey = _load_survey_or_404(db, survey_id)
+    _forbid_unless(can_share(current_user, survey), "Only the owner can manage sharing for a personal survey")
+
+    wanted = {uid for uid in payload.user_ids if uid != current_user.id}
+    users = (
+        db.query(User)
+        .filter(User.id.in_(wanted), User.is_active.is_(True), User.role == RoleName.ENUMERATOR)
+        .all()
+    ) if wanted else []
+    if len(users) != len(wanted):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="One or more selected users cannot receive shared surveys")
+
+    survey.shared_with = users
+    db.commit()
+    log_action(db, current_user.id, "SURVEY_SHARED", "Survey", survey.id)
+    return SurveySharesOut(survey_id=survey.id, user_ids=[u.id for u in users])

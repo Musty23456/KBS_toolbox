@@ -50,6 +50,10 @@ class Submission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     sync_metadata = relationship("SyncMetadata", back_populates="submission", uselist=False, cascade="all, delete-orphan")
     reviews = relationship("SubmissionReview", back_populates="submission", cascade="all, delete-orphan", order_by="SubmissionReview.created_at.desc()")
 
+    @property
+    def submitted_by_name(self) -> str | None:
+        return self.submitted_by.full_name if self.submitted_by else None
+
 
 class SubmissionAnswer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "submission_answers"

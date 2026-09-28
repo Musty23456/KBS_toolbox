@@ -1,11 +1,12 @@
 from collections import Counter
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.dependencies import require_roles
+from app.dependencies import get_current_user
+from app.services.survey_access import can_view_results, is_staff
 from app.models.question import Question
 from app.models.submission import Submission, SubmissionStatus
 from app.models.survey import Survey, SurveyStatus, SurveyVersion
@@ -34,21 +35,38 @@ def _filtered_query(db: Session, survey_id: str | None, date_from: str | None, d
     return query
 
 
+def _authorize(db: Session, user: User, survey_id: str | None) -> Survey | None:
+    """Staff may look at anything. Everyone else must name a personal survey they own."""
+    if is_staff(user):
+        return None
+    if not survey_id:
+        raise HTTPException(status_code=403, detail="Choose one of your own surveys to analyse")
+    survey = db.query(Survey).filter(Survey.id == survey_id).first()
+    if not can_view_results(user, survey):
+        raise HTTPException(status_code=403, detail="You can only analyse surveys you own")
+    return survey
+
+
 @router.get("/overview")
 def overview(
     survey_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
+    restricted_to = _authorize(db, current_user, survey_id)
     submissions = _filtered_query(db, survey_id, date_from, date_to).all()
     status_counts = Counter(s.status.value for s in submissions)
     review_counts = Counter(s.review_status.value for s in submissions)
     by_date = Counter(_date_key(s.collected_at or s.created_at) for s in submissions)
     by_enumerator = Counter(s.submitted_by_id for s in submissions)
 
-    surveys = db.query(Survey).filter(Survey.status != SurveyStatus.ARCHIVED).all()
+    surveys = (
+        [restricted_to]
+        if restricted_to is not None or not is_staff(current_user)
+        else db.query(Survey).filter(Survey.status != SurveyStatus.ARCHIVED).all()
+    )
     survey_counts = Counter(s.survey_id for s in submissions)
     survey_rows = []
     for survey in surveys:
@@ -84,8 +102,9 @@ def question_statistics(
     survey_id: str,
     question_id: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
+    _authorize(db, current_user, survey_id)
     # Question belongs to a survey VERSION, not directly to a survey, so we
     # go through the survey's current version to find its live questions.
     current_version = (

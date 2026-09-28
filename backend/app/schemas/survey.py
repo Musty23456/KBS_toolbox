@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -91,6 +92,9 @@ class QuestionOut(BaseModel):
 class SurveyCreate(BaseModel):
     title: str = Field(max_length=255)
     description: str | None = None
+    # None = default for the caller: GLOBAL for administrators, PERSONAL for
+    # everyone else. Only administrators may explicitly ask for GLOBAL.
+    scope: Literal["GLOBAL", "PERSONAL"] | None = None
     questions: list[QuestionIn] = []
     sections: list[SectionIn] = []
     groups: list[QuestionGroupIn] = []
@@ -119,9 +123,30 @@ class SurveySummaryOut(BaseModel):
     current_version_number: int | None = None
     current_version_id: str | None = None
     assigned_enumerator_ids: list[str] = []
+    scope: str = "GLOBAL"
+    created_by_id: str | None = None
 
 
 class SurveyDetailOut(SurveySummaryOut):
     sections: list[SectionOut] = []
     groups: list[QuestionGroupOut] = []
     questions: list[QuestionOut] = []
+
+
+class ShareTargetOut(BaseModel):
+    """A colleague a personal survey can be shared with."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    full_name: str
+    email: str
+
+
+class SurveySharesUpdate(BaseModel):
+    user_ids: list[str] = []
+
+
+class SurveySharesOut(BaseModel):
+    survey_id: str
+    user_ids: list[str] = []

@@ -13,11 +13,25 @@ from reportlab.lib.styles import getSampleStyleSheet
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.dependencies import require_roles
+from fastapi import HTTPException
+from app.dependencies import get_current_user
+from app.models.survey import Survey
+from app.services.survey_access import can_view_results, is_staff
 from app.models.submission import Submission, SubmissionAnswer, SubmissionStatus
 from app.models.user import RoleName, User
 
 router = APIRouter(prefix="/api/exports", tags=["exports"])
+
+
+def _authorize_export(db: Session, user: User, survey_id: str | None) -> None:
+    """Staff export anything; everyone else only a personal survey they own."""
+    if is_staff(user):
+        return
+    if not survey_id:
+        raise HTTPException(status_code=403, detail="Choose one of your own surveys to export")
+    survey = db.query(Survey).filter(Survey.id == survey_id).first()
+    if not can_view_results(user, survey):
+        raise HTTPException(status_code=403, detail="You can only export surveys you own")
 
 
 def _query_submissions(
@@ -88,8 +102,9 @@ def export_json(
     date_from: str | None = None,
     date_to: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
+    _authorize_export(db, current_user, survey_id)
     submissions = _query_submissions(db, survey_id, status_filter, submitted_by_id, date_from, date_to)
     payload = []
     for s in submissions:
@@ -128,8 +143,9 @@ def export_csv(
     date_from: str | None = None,
     date_to: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
+    _authorize_export(db, current_user, survey_id)
     rows = _flat_rows(_query_submissions(db, survey_id, status_filter, submitted_by_id, date_from, date_to))
     output = StringIO()
     writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()) if rows else ["submission_id", "survey", "status"])
@@ -146,8 +162,9 @@ def export_xlsx(
     date_from: str | None = None,
     date_to: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
+    _authorize_export(db, current_user, survey_id)
     rows = _flat_rows(_query_submissions(db, survey_id, status_filter, submitted_by_id, date_from, date_to))
     wb = Workbook()
     ws = wb.active
@@ -177,8 +194,9 @@ def export_pdf(
     date_from: str | None = None,
     date_to: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
+    _authorize_export(db, current_user, survey_id)
     submissions = _query_submissions(db, survey_id, status_filter, submitted_by_id, date_from, date_to)
     styles = getSampleStyleSheet()
     output = BytesIO()

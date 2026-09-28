@@ -46,9 +46,10 @@ def _sample_survey_payload():
     }
 
 
-def test_enumerator_cannot_create_survey(client):
+def test_enumerator_cannot_create_global_survey(client):
     headers = register_and_login(client, email="enum@test.local", role="ENUMERATOR")
-    resp = client.post("/api/surveys", json=_sample_survey_payload(), headers=headers)
+    payload = {**_sample_survey_payload(), "scope": "GLOBAL"}
+    resp = client.post("/api/surveys", json=payload, headers=headers)
     assert resp.status_code == 403
 
 

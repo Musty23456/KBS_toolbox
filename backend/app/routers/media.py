@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services.survey_access import can_view_results
 from app.models.media import MediaKind, SubmissionMedia
 from app.models.submission import Submission, SubmissionAnswer
 from app.models.user import RoleName, User
@@ -41,7 +42,11 @@ async def upload_media(
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    if submission.submitted_by_id != current_user.id and current_user.role not in (RoleName.ADMINISTRATOR, RoleName.SUPERVISOR):
+    if (
+        submission.submitted_by_id != current_user.id
+        and current_user.role not in (RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)
+        and not can_view_results(current_user, submission.survey)
+    ):
         raise HTTPException(status_code=403, detail="Not authorized to upload media for this submission")
     if file.content_type not in _ALLOWED[kind.value]:
         raise HTTPException(status_code=415, detail=f"Unsupported {kind.value.lower()} content type")

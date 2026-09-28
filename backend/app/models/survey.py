@@ -13,6 +13,16 @@ class SurveyStatus(str, enum.Enum):
     ARCHIVED = "ARCHIVED"
 
 
+class SurveyScope(str, enum.Enum):
+    """GLOBAL surveys are created by administrators for the whole organisation.
+    PERSONAL surveys belong to the enumerator (or staff member) who created
+    them and are only visible to that owner (and, in future, people they share
+    them with)."""
+
+    GLOBAL = "GLOBAL"
+    PERSONAL = "PERSONAL"
+
+
 # Many-to-many: which enumerators a survey has been restricted to. An empty
 # assignment list means "open to every enumerator" (the historical default
 # behaviour), so this table only needs a row per explicit assignment.
@@ -24,6 +34,17 @@ survey_assignments = Table(
 )
 
 
+# Many-to-many: which people a PERSONAL survey has been shared with by its
+# owner. Recipients can fill the survey (fill-only); only the owner can edit,
+# publish, share or archive it.
+survey_shares = Table(
+    "survey_shares",
+    Base.metadata,
+    Column("survey_id", String(36), ForeignKey("surveys.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 class Survey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "surveys"
 
@@ -31,12 +52,16 @@ class Survey(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     description: Mapped[str] = mapped_column(Text, nullable=True)
     status: Mapped[SurveyStatus] = mapped_column(Enum(SurveyStatus), default=SurveyStatus.DRAFT, nullable=False)
     created_by_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=SurveyScope.GLOBAL.value, server_default=SurveyScope.GLOBAL.value
+    )
 
     versions = relationship(
         "SurveyVersion", back_populates="survey", order_by="SurveyVersion.version_number", cascade="all, delete-orphan"
     )
     submissions = relationship("Submission", back_populates="survey")
     assigned_enumerators = relationship("User", secondary=survey_assignments)
+    shared_with = relationship("User", secondary=survey_shares)
 
 
 class SurveySection(Base, UUIDPrimaryKeyMixin, TimestampMixin):

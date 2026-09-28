@@ -8,6 +8,8 @@ from app.dependencies import get_current_user, require_roles
 from app.models.question import Question
 from app.models.submission import Submission, SubmissionAnswer, SubmissionStatus
 from app.models.survey import SurveyVersion
+from app.models.survey import Survey, SurveyScope
+from app.services.survey_access import can_view, can_view_results, is_staff
 from app.models.user import RoleName, User
 from app.schemas.submission import SubmissionCreate, SubmissionOut
 from app.services.audit import log_action
@@ -28,6 +30,8 @@ def _create_submission(db: Session, payload: SubmissionCreate, user: User) -> Su
     ).first()
     if not version:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown survey_version_id")
+    if not can_view(user, version.survey):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot submit to this survey")
 
     answers_by_question_id = {a.question_id: a.value_text for a in payload.answers}
     issues = validate_submission_answers(version.questions, answers_by_question_id)
@@ -83,9 +87,20 @@ def list_submissions(
     status_filter: SubmissionStatus | None = Query(default=None, alias="status"),
     submitted_by_id: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+    current_user: User = Depends(get_current_user),
 ):
-    query = db.query(Submission).options(joinedload(Submission.answers), joinedload(Submission.reviews))
+    """Staff: every submission. Everyone else: submissions to personal surveys they own."""
+    query = db.query(Submission).options(
+        joinedload(Submission.answers), joinedload(Submission.reviews), joinedload(Submission.submitted_by)
+    )
+    if not is_staff(current_user):
+        owned_ids = [
+            row[0]
+            for row in db.query(Survey.id)
+            .filter(Survey.scope == SurveyScope.PERSONAL.value, Survey.created_by_id == current_user.id)
+            .all()
+        ]
+        query = query.filter(Submission.survey_id.in_(owned_ids))
     if survey_id:
         query = query.filter(Submission.survey_id == survey_id)
     if status_filter:
@@ -112,7 +127,8 @@ def get_submission(
 
     is_owner = submission.submitted_by_id == current_user.id
     is_privileged = current_user.role in (RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)
-    if not (is_owner or is_privileged):
+    is_survey_owner = can_view_results(current_user, submission.survey)
+    if not (is_owner or is_privileged or is_survey_owner):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this submission")
 
     return submission

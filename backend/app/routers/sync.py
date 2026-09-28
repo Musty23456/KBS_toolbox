@@ -12,6 +12,7 @@ from app.models.user import RoleName, User
 from app.models.device import Device
 from app.routers.submissions import _create_submission
 from app.routers.surveys import _to_detail
+from app.services.survey_access import is_listed
 from app.schemas.sync import SyncDownloadResponse, SyncUploadRequest, SyncUploadResponse, SyncUploadResultItem
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -78,10 +79,16 @@ def sync_download(
     """
     surveys = (
         db.query(Survey)
-        .options(joinedload(Survey.versions).joinedload(SurveyVersion.questions).joinedload(Question.choices))
+        .options(
+            joinedload(Survey.versions).joinedload(SurveyVersion.questions).joinedload(Question.choices),
+            joinedload(Survey.assigned_enumerators),
+            joinedload(Survey.shared_with),
+        )
         .filter(Survey.status == SurveyStatus.PUBLISHED)
         .all()
     )
+    # Published global surveys the user may collect + their own personal ones.
+    surveys = [s for s in surveys if is_listed(current_user, s)]
     return SyncDownloadResponse(
         surveys=[_to_detail(s) for s in surveys],
         server_time=datetime.now(timezone.utc).isoformat(),

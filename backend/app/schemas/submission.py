@@ -41,6 +41,7 @@ class SubmissionOut(BaseModel):
     survey_id: str
     survey_version_id: str
     submitted_by_id: str
+    submitted_by_name: str | None = None
     client_submission_uuid: str
     status: SubmissionStatus
     review_status: str

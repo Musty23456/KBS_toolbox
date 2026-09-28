@@ -115,6 +115,17 @@ request/response schemas) is auto-generated at `/docs` (Swagger) and
 - `GET /api/sync/download` — full definitions of all published surveys, for
   offline caching on-device
 
+**Devices / presence**
+
+- `POST /api/devices/heartbeat` — sent by the Android app (about once a
+  minute while open) to record that the device is online.
+- `GET /api/devices/online-enumerators` — Administrator/Supervisor only.
+  Returns each active enumerator with `status` = `ONLINE` (seen ≤ 3 min
+  ago), `AWAY` (≤ 30 min) or `OFFLINE`, plus counts and last-seen/last-sync
+  times. The thresholds are the constants `ONLINE_WINDOW_SECONDS` and
+  `AWAY_WINDOW_SECONDS` in `app/routers/devices.py`.
+
+
 ## Design notes
 
 - **Survey versioning**: editing a published survey's questions creates a

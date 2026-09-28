@@ -47,3 +47,85 @@ def deactivate(device_id: str, db: Session = Depends(get_db), current_user: User
     d.is_active = False
     db.commit(); db.refresh(d)
     return d
+
+
+# ---------------------------------------------------------------------------
+# Online enumerators (live presence) — additive; nothing above is changed.
+# An enumerator is ONLINE if their app pinged us in the last 3 minutes,
+# AWAY if in the last 30 minutes, otherwise OFFLINE.
+# ---------------------------------------------------------------------------
+ONLINE_WINDOW_SECONDS = 180
+AWAY_WINDOW_SECONDS = 1800
+
+
+def _aware(dt):
+    if dt is None:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+@router.get("/online-enumerators")
+def online_enumerators(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)),
+):
+    now = datetime.now(timezone.utc)
+
+    enumerators = (
+        db.query(User)
+        .filter(User.role == RoleName.ENUMERATOR, User.is_active == True)  # noqa: E712
+        .all()
+    )
+    devices = (
+        db.query(Device)
+        .filter(Device.is_active == True)  # noqa: E712
+        .all()
+    )
+
+    # Most recently seen device per user
+    latest = {}
+    for d in devices:
+        seen = _aware(d.last_seen_at)
+        current = latest.get(d.user_id)
+        if current is None or (seen and (_aware(current.last_seen_at) is None or seen > _aware(current.last_seen_at))):
+            latest[d.user_id] = d
+
+    rows = []
+    for u in enumerators:
+        d = latest.get(u.id)
+        seen = _aware(d.last_seen_at) if d else None
+        seconds = int((now - seen).total_seconds()) if seen else None
+        if seconds is None:
+            state = "OFFLINE"
+        elif seconds <= ONLINE_WINDOW_SECONDS:
+            state = "ONLINE"
+        elif seconds <= AWAY_WINDOW_SECONDS:
+            state = "AWAY"
+        else:
+            state = "OFFLINE"
+        rows.append({
+            "user_id": u.id,
+            "full_name": u.full_name,
+            "email": u.email,
+            "device_id": d.device_id if d else None,
+            "app_version": d.app_version if d else None,
+            "last_seen_at": seen.isoformat() if seen else None,
+            "last_sync_at": _aware(d.last_sync_at).isoformat() if d and d.last_sync_at else None,
+            "last_sync_status": d.last_sync_status if d else None,
+            "seconds_since_seen": seconds,
+            "status": state,
+        })
+
+    order = {"ONLINE": 0, "AWAY": 1, "OFFLINE": 2}
+    rows.sort(key=lambda r: (order[r["status"]], r["seconds_since_seen"] if r["seconds_since_seen"] is not None else 10**12))
+
+    return {
+        "server_time": now.isoformat(),
+        "counts": {
+            "online": sum(1 for r in rows if r["status"] == "ONLINE"),
+            "away": sum(1 for r in rows if r["status"] == "AWAY"),
+            "offline": sum(1 for r in rows if r["status"] == "OFFLINE"),
+            "total": len(rows),
+        },
+        "enumerators": rows,
+    }
