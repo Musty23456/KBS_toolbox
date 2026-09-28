@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { exportsApi, surveysApi, usersApi } from "../../api/services";
 import type { SurveySummary, UserAccount } from "../../api/types";
+import { isStaff, resultsSurveys } from "../../api/surveyAccess";
+import { useAuth } from "../../context/AuthContext";
 
 export function ExportPage() {
+  const { user } = useAuth();
+  const staff = isStaff(user);
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [surveyId, setSurveyId] = useState("");
@@ -13,11 +17,14 @@ export function ExportPage() {
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([surveysApi.list(), usersApi.list()]).then(([s, u]) => {
-      setSurveys(s);
+    // Only staff can list user accounts; owners of personal surveys export one survey at a time.
+    Promise.all([surveysApi.list(), staff ? usersApi.list() : Promise.resolve([] as UserAccount[])]).then(([s, u]) => {
+      const visible = resultsSurveys(s, user);
+      setSurveys(visible);
       setUsers(u.filter((x) => x.role === "ENUMERATOR"));
+      if (!staff && visible.length > 0) setSurveyId(visible[0].id);
     });
-  }, []);
+  }, [user?.id]);
 
   const filters = {
     ...(surveyId ? { survey_id: surveyId } : {}),
@@ -39,15 +46,15 @@ export function ExportPage() {
       <section className="card">
         <h2>Filters</h2>
         <div className="form-grid">
-          <label>Survey<select value={surveyId} onChange={(e) => setSurveyId(e.target.value)}><option value="">All surveys</option>{surveys.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}</select></label>
+          <label>Survey<select value={surveyId} onChange={(e) => setSurveyId(e.target.value)}>{staff && <option value="">All surveys</option>}{surveys.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}</select></label>
           <label>Status<select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option><option value="SYNCED">Synced</option><option value="FAILED">Failed</option><option value="UPLOADED">Uploaded</option><option value="PENDING">Pending</option></select></label>
-          <label>Enumerator<select value={enumerator} onChange={(e) => setEnumerator(e.target.value)}><option value="">All enumerators</option>{users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</select></label>
+          {staff && <label>Enumerator<select value={enumerator} onChange={(e) => setEnumerator(e.target.value)}><option value="">All enumerators</option>{users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}</select></label>}
           <label>From<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
           <label>To<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} /></label>
         </div>
       </section>
       <section className="card"><h2>Download</h2><div className="export-grid">
-        {(["xlsx", "csv", "json", "pdf"] as const).map((format) => <button className="export-card" key={format} disabled={busy !== null} onClick={() => download(format)}><strong>{busy === format ? "Preparing…" : format.toUpperCase()}</strong><span>{format === "xlsx" ? "Excel spreadsheet" : format === "csv" ? "Flat data for analysis" : format === "json" ? "Structured API data" : "Printable report"}</span></button>)}
+        {(["xlsx", "csv", "json", "pdf"] as const).map((format) => <button className="export-card" key={format} disabled={busy !== null || (!staff && !surveyId)} onClick={() => download(format)}><strong>{busy === format ? "Preparing…" : format.toUpperCase()}</strong><span>{format === "xlsx" ? "Excel spreadsheet" : format === "csv" ? "Flat data for analysis" : format === "json" ? "Structured API data" : "Printable report"}</span></button>)}
       </div></section>
     </div>
   );

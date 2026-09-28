@@ -68,6 +68,9 @@ point `VITE_API_BASE_URL` at it.
   panel
 - `/users` — manage enumerator/supervisor/administrator accounts
   (administrator and supervisor roles only)
+- **Online enumerators** (`/online-enumerators`, Admin/Supervisor) — live
+  presence board, auto-refreshes every 15 seconds.
+
 
 ## Design notes
 
@@ -77,6 +80,14 @@ table rows, an ink sidebar against a sage-paper content area) since the
 audience is running an official statistical field operation, not browsing
 a consumer product. See `src/styles/tokens.css` for the full palette/type
 system if you want to reskin it for a different organization's branding.
+
+## Styling layers
+
+- `src/styles/tokens.css` — colours, spacing, type scale.
+- `src/styles/global.css` — the original base styles.
+- `src/styles/polish.css` — the additive design and animation layer
+  (imported last in `main.tsx`). Delete this file and its import to return
+  to the original look.
 
 ## Known limitations / next steps
 

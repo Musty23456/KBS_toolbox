@@ -6,6 +6,7 @@ import type {
   SubmissionStatus,
   SurveyDetail,
   SurveySummary,
+  ShareTarget,
   UserAccount,
   Device,
 } from "./types";
@@ -118,6 +119,7 @@ export const surveysApi = {
   async create(payload: {
     title: string;
     description?: string;
+    scope?: "GLOBAL" | "PERSONAL";
     questions: any[];
     sections?: any[];
     groups?: any[];
@@ -168,6 +170,22 @@ export const surveysApi = {
 
   async archive(id: string): Promise<void> {
     await apiClient.delete(`/api/surveys/${id}`);
+  },
+
+  /** Active enumerators (other than me) a personal survey can be shared with. */
+  async shareTargets(): Promise<ShareTarget[]> {
+    const { data } = await apiClient.get("/api/surveys/share-targets");
+    return data;
+  },
+
+  async getShares(id: string): Promise<string[]> {
+    const { data } = await apiClient.get(`/api/surveys/${id}/shares`);
+    return data.user_ids;
+  },
+
+  async setShares(id: string, userIds: string[]): Promise<string[]> {
+    const { data } = await apiClient.put(`/api/surveys/${id}/shares`, { user_ids: userIds });
+    return data.user_ids;
   },
 };
 

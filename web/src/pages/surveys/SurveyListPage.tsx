@@ -11,8 +11,14 @@ export function SurveyListPage() {
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const canManage = user?.role === "ADMINISTRATOR" || user?.role === "SUPERVISOR";
-  const canArchive = user?.role === "ADMINISTRATOR";
+  const isAdmin = user?.role === "ADMINISTRATOR";
+  const isStaff = isAdmin || user?.role === "SUPERVISOR";
+
+  // Mirrors the backend rules in app/services/survey_access.py
+  const isOwner = (s: SurveySummary) => s.created_by_id === user?.id;
+  const canEditSurvey = (s: SurveySummary) => (s.scope === "PERSONAL" ? isOwner(s) : isStaff);
+  const canArchiveSurvey = (s: SurveySummary) => (s.scope === "PERSONAL" ? isOwner(s) || isAdmin : isAdmin);
+  const canManage = true; // every signed-in user can create (personal) surveys
 
   async function reload() {
     setIsLoading(true);
@@ -55,7 +61,11 @@ export function SurveyListPage() {
       <div className="page-header">
         <div>
           <h1>Surveys</h1>
-          <p>Create, publish, and version the forms your enumerators collect data with.</p>
+          <p>
+            {isAdmin
+              ? "Create, publish, and version the forms your enumerators collect data with."
+              : "Build your own personal surveys, or fill the ones shared with you by your administrator."}
+          </p>
         </div>
         {canManage && (
           <Link to="/surveys/new" className="btn btn-primary">
@@ -87,7 +97,7 @@ export function SurveyListPage() {
               <th>Version</th>
               <th>Created</th>
               <th>Fill</th>
-              {canManage && <th>Actions</th>}
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -95,6 +105,20 @@ export function SurveyListPage() {
               <tr key={survey.id}>
                 <td>
                   <Link to={`/surveys/${survey.id}`}>{survey.title}</Link>
+                  {survey.scope === "PERSONAL" && (
+                    <span
+                      style={{
+                        marginLeft: 8,
+                        padding: "1px 8px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        background: "rgba(99,102,241,0.12)",
+                        color: "#4f46e5",
+                      }}
+                    >
+                      {isOwner(survey) ? "Personal" : "Shared with me"}
+                    </span>
+                  )}
                   {survey.description && (
                     <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 2 }}>{survey.description}</div>
                   )}
@@ -111,25 +135,25 @@ export function SurveyListPage() {
                     </Link>
                   )}
                 </td>
-                {canManage && (
-                  <td>
-                    <div style={{ display: "flex", gap: 6 }}>
+                <td>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {canEditSurvey(survey) && (
                       <Link to={`/surveys/${survey.id}`} className="btn btn-secondary btn-icon" title="Edit">
                         Edit
                       </Link>
-                      {survey.status !== "ARCHIVED" && (
-                        <button className="btn btn-secondary btn-icon" onClick={() => handlePublishToggle(survey)}>
-                          {survey.status === "PUBLISHED" ? "Unpublish" : "Publish"}
-                        </button>
-                      )}
-                      {canArchive && survey.status !== "ARCHIVED" && (
-                        <button className="btn btn-danger btn-icon" onClick={() => handleArchive(survey)}>
-                          Archive
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                )}
+                    )}
+                    {canEditSurvey(survey) && survey.status !== "ARCHIVED" && (
+                      <button className="btn btn-secondary btn-icon" onClick={() => handlePublishToggle(survey)}>
+                        {survey.status === "PUBLISHED" ? "Unpublish" : "Publish"}
+                      </button>
+                    )}
+                    {canArchiveSurvey(survey) && survey.status !== "ARCHIVED" && (
+                      <button className="btn btn-danger btn-icon" onClick={() => handleArchive(survey)}>
+                        Archive
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

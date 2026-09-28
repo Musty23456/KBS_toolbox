@@ -57,19 +57,20 @@ export function Layout() {
           <NavLink to="/submissions" className={({ isActive }) => (isActive ? "active" : "")}>
             Submissions
           </NavLink>
-          {canManageSurveys && (
-            <NavLink to="/exports" className={({ isActive }) => (isActive ? "active" : "")}>
-              Export Center
-            </NavLink>
-          )}
+          <NavLink to="/exports" className={({ isActive }) => (isActive ? "active" : "")}>
+            Export Center
+          </NavLink>
           {canManageSurveys && (
             <NavLink to="/translations" className={({ isActive }) => (isActive ? "active" : "")}>
               Languages
             </NavLink>
           )}
-          {canManageSurveys && (
-            <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}>
-              Analytics
+          <NavLink to="/analytics" className={({ isActive }) => (isActive ? "active" : "")}>
+            Analytics
+          </NavLink>
+          {canManageUsers && (
+            <NavLink to="/online-enumerators" className={({ isActive }) => (isActive ? "active" : "")}>
+              Online enumerators
             </NavLink>
           )}
           {canManageUsers && (

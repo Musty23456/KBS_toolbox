@@ -15,6 +15,7 @@ import { UsersPage } from "./pages/users/UsersPage";
 import { PasswordResetRequestsPage } from "./pages/users/PasswordResetRequestsPage";
 import { AnalyticsPage } from "./pages/analytics/AnalyticsPage";
 import { DevicesPage } from "./pages/devices/DevicesPage";
+import { OnlineEnumeratorsPage } from "./pages/devices/OnlineEnumeratorsPage";
 import { MapPage } from "./pages/map/MapPage";
 import { ExportPage } from "./pages/exports/ExportPage";
 import { TranslationsPage } from "./pages/translations/TranslationsPage";
@@ -53,13 +54,7 @@ export default function App() {
 
             <Route
               path="/surveys/new"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}
-                >
-                  <SurveyBuilderPage />
-                </ProtectedRoute>
-              }
+              element={<SurveyBuilderPage />}
             />
 
             <Route
@@ -85,13 +80,7 @@ export default function App() {
 
             <Route
               path="/exports"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}
-                >
-                  <ExportPage />
-                </ProtectedRoute>
-              }
+              element={<ExportPage />}
             />
 
             <Route
@@ -107,24 +96,12 @@ export default function App() {
 
             <Route
               path="/submissions"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}
-                >
-                  <SubmissionsPage />
-                </ProtectedRoute>
-              }
+              element={<SubmissionsPage />}
             />
 
             <Route
               path="/analytics"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}
-                >
-                  <AnalyticsPage />
-                </ProtectedRoute>
-              }
+              element={<AnalyticsPage />}
             />
 
             <Route
@@ -134,6 +111,17 @@ export default function App() {
                   allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}
                 >
                   <DevicesPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/online-enumerators"
+              element={
+                <ProtectedRoute
+                  allowedRoles={["ADMINISTRATOR", "SUPERVISOR"]}
+                >
+                  <OnlineEnumeratorsPage />
                 </ProtectedRoute>
               }
             />

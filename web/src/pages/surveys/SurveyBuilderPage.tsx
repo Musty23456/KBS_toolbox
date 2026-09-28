@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { surveysApi, usersApi } from "../../api/services";
-import type { Question, QuestionGroup, SurveyDetail, SurveySection, UserAccount } from "../../api/types";
+import type { Question, QuestionGroup, ShareTarget, SurveyDetail, SurveySection, UserAccount } from "../../api/types";
 import { QuestionEditor } from "../../components/QuestionEditor";
 import { extractErrorMessage } from "../../api/client";
 import { StatusBadge } from "../../components/StatusBadge";
@@ -23,7 +23,8 @@ export function SurveyBuilderPage() {
   const isNew = !surveyId || surveyId === "new";
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canEdit = user?.role === "ADMINISTRATOR" || user?.role === "SUPERVISOR";
+  const isAdmin = user?.role === "ADMINISTRATOR";
+  const isStaff = isAdmin || user?.role === "SUPERVISOR";
 
   const [survey, setSurvey] = useState<SurveyDetail | null>(null);
   const [title, setTitle] = useState("");
@@ -33,6 +34,12 @@ export function SurveyBuilderPage() {
   const [groups, setGroups] = useState<QuestionGroup[]>([]);
   const [enumerators, setEnumerators] = useState<UserAccount[]>([]);
   const [assignedIds, setAssignedIds] = useState<string[]>([]);
+  // Only administrators can choose GLOBAL; everyone else always creates PERSONAL.
+  const [newScope, setNewScope] = useState<"GLOBAL" | "PERSONAL">(isAdmin ? "GLOBAL" : "PERSONAL");
+  const [shareTargets, setShareTargets] = useState<ShareTarget[]>([]);
+  const [sharedIds, setSharedIds] = useState<string[]>([]);
+  const [isSavingShares, setIsSavingShares] = useState(false);
+  const [sharesMessage, setSharesMessage] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewValues, setPreviewValues] = useState<Record<string, string | string[]>>({});
   const [history, setHistory] = useState<Question[][]>([]);
@@ -42,13 +49,58 @@ export function SurveyBuilderPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const scope: "GLOBAL" | "PERSONAL" = isNew ? newScope : survey?.scope ?? "GLOBAL";
+  const isOwner = isNew || survey?.created_by_id === user?.id;
+  // Mirrors backend can_edit(): owner edits personal surveys; staff edit global ones.
+  const canEdit = isNew ? true : scope === "PERSONAL" ? isOwner : isStaff;
+  // Enumerator assignment only makes sense for global surveys, and only staff can list users.
+  const canAssign = isStaff && scope === "GLOBAL";
+
   useEffect(() => {
-    if (!canEdit) return;
+    if (!canAssign) return;
     usersApi
       .list()
       .then((all) => setEnumerators(all.filter((u) => u.role === "ENUMERATOR" && u.is_active)))
       .catch(() => setEnumerators([]));
-  }, [canEdit]);
+  }, [canAssign]);
+
+  // Sharing: only the owner of a saved personal survey.
+  const canShare = !isNew && scope === "PERSONAL" && survey?.created_by_id === user?.id;
+
+  useEffect(() => {
+    if (!canShare || !survey) return;
+    Promise.all([surveysApi.shareTargets(), surveysApi.getShares(survey.id)])
+      .then(([targets, ids]) => {
+        setShareTargets(targets);
+        setSharedIds(ids);
+      })
+      .catch(() => setShareTargets([]));
+  }, [canShare, survey?.id]);
+
+  function toggleShare(id: string) {
+    setSharesMessage(null);
+    setSharedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function handleSaveShares() {
+    if (!survey) return;
+    setError(null);
+    setSharesMessage(null);
+    setIsSavingShares(true);
+    try {
+      const saved = await surveysApi.setShares(survey.id, sharedIds);
+      setSharedIds(saved);
+      setSharesMessage(
+        saved.length === 0
+          ? "Sharing turned off."
+          : `Shared with ${saved.length} ${saved.length === 1 ? "person" : "people"}.`
+      );
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setIsSavingShares(false);
+    }
+  }
 
   useEffect(() => {
     if (isNew) return;
@@ -217,7 +269,8 @@ export function SurveyBuilderPage() {
           questions: orderedQuestions,
           sections: orderedSections,
           groups: orderedGroups,
-          assigned_enumerator_ids: assignedIds,
+          scope: newScope,
+          assigned_enumerator_ids: canAssign ? assignedIds : [],
         });
         navigate(`/surveys/${created.id}`);
       } else {
@@ -227,7 +280,7 @@ export function SurveyBuilderPage() {
           questions: orderedQuestions,
           sections: orderedSections,
           groups: orderedGroups,
-          assigned_enumerator_ids: assignedIds,
+          ...(canAssign ? { assigned_enumerator_ids: assignedIds } : {}),
         });
         setSurvey(updated);
         setQuestions(updated.questions);
@@ -384,6 +437,61 @@ export function SurveyBuilderPage() {
         </div>
       </div>
 
+      {isNew && isAdmin && (
+        <div className="panel" style={{ marginBottom: 24 }}>
+          <label style={{ display: "block", marginBottom: 8 }}>Survey type</label>
+          <select value={newScope} onChange={(e) => setNewScope(e.target.value as "GLOBAL" | "PERSONAL")}>
+            <option value="GLOBAL">Global — for the whole organisation</option>
+            <option value="PERSONAL">Personal — only visible to me</option>
+          </select>
+        </div>
+      )}
+
+      {scope === "PERSONAL" && (
+        <div className="panel" style={{ marginBottom: 24 }}>
+          <strong>Personal survey</strong>
+          <p style={{ margin: "4px 0 0", color: "var(--muted, #6b7280)" }}>
+            {isOwner
+              ? "Only you can fill this survey, unless you share it below. Publish it to make it available in your Android app."
+              : "This survey was shared with you. You can fill it, but only its owner can change it."}
+          </p>
+        </div>
+      )}
+
+      {canShare && (
+        <div className="panel" style={{ marginBottom: 24 }}>
+          <label style={{ display: "block", marginBottom: 8 }}>Share this survey</label>
+          <p style={{ marginTop: 0, color: "var(--muted, #6b7280)" }}>
+            People you pick can fill this survey from their app once it is published. They cannot edit, publish or
+            share it. Untick everyone to stop sharing.
+          </p>
+          {survey?.status !== "PUBLISHED" && (
+            <p style={{ marginTop: 0, color: "var(--muted, #6b7280)" }}>
+              This survey is not published yet, so they will only see it after you publish it.
+            </p>
+          )}
+          {shareTargets.length === 0 ? (
+            <p className="loading-text">No other enumerators to share with yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {shareTargets.map((u) => (
+                <label key={u.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={sharedIds.includes(u.id)} onChange={() => toggleShare(u.id)} />
+                  {u.full_name} <span style={{ color: "var(--muted, #6b7280)" }}>({u.email})</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+            <button type="button" className="btn btn-primary" onClick={handleSaveShares} disabled={isSavingShares}>
+              {isSavingShares ? "Saving…" : "Save sharing"}
+            </button>
+            {sharesMessage && <span style={{ color: "var(--muted, #6b7280)" }}>{sharesMessage}</span>}
+          </div>
+        </div>
+      )}
+
+      {canAssign && (
       <div className="panel" style={{ marginBottom: 24 }}>
         <label style={{ display: "block", marginBottom: 8 }}>Who can collect this survey</label>
         <p style={{ marginTop: 0, color: "var(--muted, #6b7280)" }}>
@@ -403,6 +511,7 @@ export function SurveyBuilderPage() {
           </div>
         )}
       </div>
+      )}
 
       <div className="panel" style={{ marginBottom: 24 }}>
         <div className="builder-toolbar" style={{ marginBottom: 12 }}>

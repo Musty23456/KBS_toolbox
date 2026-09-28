@@ -112,6 +112,14 @@ export interface SurveySummary {
   current_version_number: number | null;
   current_version_id: string | null;
   assigned_enumerator_ids: string[];
+  scope: "GLOBAL" | "PERSONAL";
+  created_by_id: string | null;
+}
+
+export interface ShareTarget {
+  id: string;
+  full_name: string;
+  email: string;
 }
 
 export interface SurveyDetail extends SurveySummary {
@@ -155,6 +163,7 @@ export interface Submission {
   survey_id: string;
   survey_version_id: string;
   submitted_by_id: string;
+  submitted_by_name?: string | null;
   client_submission_uuid: string;
   status: SubmissionStatus;
   gps_latitude: number | null;

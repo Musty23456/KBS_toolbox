@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { submissionsApi, surveysApi } from "../../api/services";
-import type { ReviewStatus, Submission, SubmissionStatus, SurveySummary } from "../../api/types";
+import type { ReviewStatus, Submission, SubmissionStatus, SurveyDetail, SurveySummary } from "../../api/types";
+import { isStaff, resultsSurveys } from "../../api/surveyAccess";
+import { useAuth } from "../../context/AuthContext";
 import { StatusBadge } from "../../components/StatusBadge";
 
 const STATUS_OPTIONS: SubmissionStatus[] = ["PENDING", "UPLOADING", "UPLOADED", "SYNCED", "FAILED"];
@@ -29,6 +31,9 @@ function ReviewBadge({ status }: { status: ReviewStatus }) {
 }
 
 export function SubmissionsPage() {
+  const { user } = useAuth();
+  const staff = isStaff(user);
+  const [selectedSurvey, setSelectedSurvey] = useState<SurveyDetail | null>(null);
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [surveyFilter, setSurveyFilter] = useState<string>("");
@@ -59,8 +64,29 @@ export function SubmissionsPage() {
   }
 
   useEffect(() => {
-    surveysApi.list().then(setSurveys);
-  }, []);
+    surveysApi.list().then((all) => setSurveys(resultsSurveys(all, user)));
+  }, [user?.id]);
+
+  // Load the survey's questions so answers can be shown with readable labels.
+  useEffect(() => {
+    if (!selected) {
+      setSelectedSurvey(null);
+      return;
+    }
+    let cancelled = false;
+    surveysApi
+      .get(selected.survey_id)
+      .then((detail) => !cancelled && setSelectedSurvey(detail))
+      .catch(() => !cancelled && setSelectedSurvey(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.survey_id]);
+
+  function questionLabel(questionId: string) {
+    const q = selectedSurvey?.questions.find((x) => x.id === questionId);
+    return q ? q.label : questionId.slice(0, 8);
+  }
 
   useEffect(() => {
     loadSubmissions();
@@ -94,13 +120,13 @@ export function SubmissionsPage() {
       <div className="page-header">
         <div>
           <h1>Submissions & Review</h1>
-          <p>Inspect field responses and move them through the review workflow.</p>
+          <p>{staff ? "Inspect field responses and move them through the review workflow." : "Responses collected on your personal surveys, including from people you shared them with."}</p>
         </div>
       </div>
 
       <div className="toolbar">
         <select value={surveyFilter} onChange={(e) => setSurveyFilter(e.target.value)}>
-          <option value="">All surveys</option>
+          <option value="">{staff ? "All surveys" : "All my surveys"}</option>
           {surveys.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -114,18 +140,19 @@ export function SubmissionsPage() {
       </div>
 
       {isLoading ? <p className="loading-text">Loading…</p> : submissions.length === 0 ? (
-        <div className="empty-state"><h3>No submissions match these filters</h3><p>Responses will appear here when enumerators submit or sync forms.</p></div>
+        <div className="empty-state"><h3>No submissions match these filters</h3><p>{staff ? "Responses will appear here when enumerators submit or sync forms." : "Responses will appear here once you or the people you shared a survey with submit and sync forms."}</p></div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 430px" : "1fr", gap: 24 }}>
           <table className="registry-table">
-            <thead><tr><th>Submission</th><th>Survey</th><th>Sync</th><th>Review</th><th>Collected</th></tr></thead>
+            <thead><tr><th>Submission</th><th>Survey</th><th>Collected by</th><th>Sync</th>{staff && <th>Review</th>}<th>Collected</th></tr></thead>
             <tbody>
               {submissions.map((s) => (
                 <tr key={s.id} onClick={() => { setSelected(s); setReviewStatus(s.review_status === "RECEIVED" ? "UNDER_REVIEW" : s.review_status); }} style={{ cursor: "pointer" }}>
                   <td className="mono">{s.id.slice(0, 8)}</td>
                   <td>{surveyTitle(s.survey_id)}</td>
+                  <td>{s.submitted_by_name ?? "—"}</td>
                   <td><StatusBadge status={s.status} /></td>
-                  <td><ReviewBadge status={s.review_status} /></td>
+                  {staff && <td><ReviewBadge status={s.review_status} /></td>}
                   <td>{s.collected_at ? new Date(s.collected_at).toLocaleString() : "—"}</td>
                 </tr>
               ))}
@@ -139,9 +166,12 @@ export function SubmissionsPage() {
                 <button className="btn btn-icon" onClick={() => setSelected(null)}>Close</button>
               </div>
               <p className="mono" style={{ fontSize: 12 }}>{selected.id}</p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><StatusBadge status={selected.status} /><ReviewBadge status={selected.review_status} /></div>
+              <p style={{ margin: "4px 0" }}>Collected by <strong>{selected.submitted_by_name ?? "—"}</strong></p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><StatusBadge status={selected.status} />{staff && <ReviewBadge status={selected.review_status} />}</div>
               {selected.gps_latitude != null && <p style={{ marginTop: 12 }}>GPS: {selected.gps_latitude.toFixed(5)}, {selected.gps_longitude?.toFixed(5)}</p>}
 
+              {staff && (
+              <>
               <h3 style={{ marginTop: 20 }}>Review</h3>
               {currentReview && <div className="panel" style={{ marginBottom: 12 }}><ReviewBadge status={currentReview.status} /><p>{currentReview.comment || "No comment"}</p><small>{new Date(currentReview.created_at).toLocaleString()}</small></div>}
               <select value={reviewStatus} onChange={(e) => setReviewStatus(e.target.value as ReviewStatus)} style={{ width: "100%" }}>
@@ -150,9 +180,11 @@ export function SubmissionsPage() {
               <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Reviewer comment (required for resubmission)" rows={4} style={{ width: "100%", marginTop: 10 }} />
               {reviewError && <p style={{ color: "crimson" }}>{reviewError}</p>}
               <button className="btn btn-primary" disabled={savingReview} onClick={submitReview} style={{ marginTop: 10 }}>{savingReview ? "Saving…" : "Save review"}</button>
+              </>
+              )}
 
               <h3 style={{ marginTop: 20 }}>Answers</h3>
-              <table className="registry-table"><tbody>{selected.answers.map((a) => <tr key={a.id}><td className="mono">{a.question_id.slice(0, 8)}{a.group_instance_index != null ? ` #${a.group_instance_index + 1}` : ""}</td><td>{a.value_text ?? a.media_reference ?? "—"}</td></tr>)}</tbody></table>
+              <table className="registry-table"><tbody>{selected.answers.map((a) => <tr key={a.id}><td>{questionLabel(a.question_id)}{a.group_instance_index != null ? ` #${a.group_instance_index + 1}` : ""}</td><td>{a.value_text ?? a.media_reference ?? "—"}</td></tr>)}</tbody></table>
             </div>
           )}
         </div>

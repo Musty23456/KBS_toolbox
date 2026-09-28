@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { analyticsApi, surveysApi } from "../../api/services";
 import type { SurveySummary } from "../../api/types";
+import { isStaff, resultsSurveys } from "../../api/surveyAccess";
+import { useAuth } from "../../context/AuthContext";
 
 const CHART_COLORS = ["#2f6f4f", "#c98a2c", "#4d7ea8", "#a8474d", "#7a5ea8", "#3f9c8a", "#c2703f"];
 
@@ -29,6 +31,8 @@ type QuestionStat = {
 };
 
 export function AnalyticsPage() {
+  const { user } = useAuth();
+  const staff = isStaff(user);
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
   const [selectedSurveyId, setSelectedSurveyId] = useState("");
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
@@ -39,12 +43,13 @@ export function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    surveysApi.list().then((items) => {
+    surveysApi.list().then((all) => {
+      const items = resultsSurveys(all, user);
       setSurveys(items);
       setSelectedSurveyId(items[0]?.id ?? "");
       if (!items.length) setLoading(false);
     });
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!selectedSurveyId) return;
@@ -61,11 +66,11 @@ export function AnalyticsPage() {
 
   const selectedQuestion = useMemo(() => questions.find((q) => q.question_id === selectedQuestionId), [questions, selectedQuestionId]);
 
-  if (!surveys.length && !loading) return <div className="empty-state"><h3>No surveys yet</h3><p>Create a survey and collect submissions to see advanced analytics.</p></div>;
+  if (!surveys.length && !loading) return <div className="empty-state"><h3>No surveys yet</h3><p>{staff ? "Create a survey and collect submissions to see advanced analytics." : "Create a personal survey, share it with your colleagues and collect submissions to analyse them here."}</p></div>;
 
   return (
     <div>
-      <div className="page-header"><div><h1>Advanced Analytics</h1><p>Measure collection progress, review workflow, enumerator activity and question responses.</p></div></div>
+      <div className="page-header"><div><h1>Advanced Analytics</h1><p>{staff ? "Measure collection progress, review workflow, enumerator activity and question responses." : "Measure collection progress, who collected what, and how people answered your personal surveys."}</p></div></div>
       <div className="toolbar">
         <select value={selectedSurveyId} onChange={(e) => setSelectedSurveyId(e.target.value)}>{surveys.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}</select>
         <label>From <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} /></label>
