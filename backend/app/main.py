@@ -101,6 +101,7 @@ def _apply_manual_column_migrations():
         "ALTER TABLE submissions ADD COLUMN IF NOT EXISTS review_status VARCHAR(32) NOT NULL DEFAULT 'RECEIVED'",
         "ALTER TABLE submission_answers ADD COLUMN IF NOT EXISTS media_reference VARCHAR(1000)",
         "ALTER TABLE submission_answers ADD COLUMN IF NOT EXISTS group_instance_index INTEGER",
+        "ALTER TABLE surveys ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'GLOBAL'",
     ]
     with engine.begin() as conn:
         for statement in statements:
