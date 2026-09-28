@@ -1,0 +1,10 @@
+/* Login background photo (overrides the plain animated gradient from polish.css). */
+.login-screen {
+  background-image:
+    linear-gradient(160deg, rgba(19, 29, 38, 0.82), rgba(28, 58, 46, 0.45) 55%, rgba(22, 33, 43, 0.82)),
+    url("../assets/login-bg.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  animation: none;
+}
