@@ -198,14 +198,55 @@ class FormFillViewModel(
         }
     }
 
+    /**
+     * Answers for one "view" of the form: every top-level question, plus (if
+     * [groupInstances] names a group) that group's questions read from their
+     * one instance. Group answers are stored under keys like "questionId#0",
+     * never under the bare question id — so a lookup that ignores the
+     * instance suffix always sees them as blank. That used to make submit()
+     * report every required question inside a group as missing, no matter
+     * what the enumerator had actually entered.
+     */
+    private fun answersFor(groupInstances: Map<String, Int>): Map<String, String?> {
+        val state = _uiState.value
+        val result = mutableMapOf<String, String?>()
+        state.questions.forEach { q ->
+            val instance = q.groupId?.let { groupInstances[it] }
+            val key = answerKey(q.id, instance)
+            result[q.id] = state.textAnswers[key] ?: state.mediaAnswers[key]
+        }
+        return result
+    }
+
+    private fun questionIdForCode(state: FormFillUiState, code: String): String? =
+        state.questions.firstOrNull { it.code == code }?.id
+
     fun submit() {
         val state = _uiState.value
-        val issues = AnswerValidator.validate(state.questions.filter { state.isVisible(it) }, allAnswersAsText())
-        if (issues.isNotEmpty()) {
-            val errorsByQuestionId = state.questions.associateBy { it.code }
-            val errorMap = issues.mapNotNull { issue ->
-                errorsByQuestionId[issue.questionCode]?.let { it.id to issue.message }
-            }.toMap()
+        val errorMap = mutableMapOf<String, String>()
+
+        // Ungrouped questions: validated once, against the plain (no-instance) answers.
+        val topLevelQuestions = state.questions.filter { it.groupId == null }
+        AnswerValidator.validate(topLevelQuestions, answersFor(emptyMap())).forEach { issue ->
+            questionIdForCode(state, issue.questionCode)?.let { errorMap[it] = issue.message }
+        }
+
+        // Each group instance is validated on its own, so a required question inside a
+        // repeating group is checked against that specific instance's own answers.
+        state.groups.forEach { group ->
+            val groupQuestions = state.questions.filter { it.groupId == group.id }
+            val instances = state.groupInstances[group.id] ?: listOf(0)
+            instances.forEach { instance ->
+                val issues = AnswerValidator.validate(groupQuestions, answersFor(mapOf(group.id to instance)))
+                issues.forEach { issue ->
+                    questionIdForCode(state, issue.questionCode)?.let { qid ->
+                        errorMap[answerKey(qid, instance)] = issue.message
+                    }
+                }
+            }
+        }
+
+        if (errorMap.isNotEmpty()) {
             _uiState.value = state.copy(validationErrors = errorMap, errorMessage = "Please fix the highlighted fields.")
             return
         }
@@ -216,15 +257,6 @@ class FormFillViewModel(
             SyncWorker.triggerImmediateSync(appContext)
             _uiState.value = _uiState.value.copy(isSaving = false, isSubmitted = true)
         }
-    }
-
-    private fun allAnswersAsText(): Map<String, String?> {
-        val state = _uiState.value
-        val combined = mutableMapOf<String, String?>()
-        state.questions.forEach { q ->
-            combined[q.id] = state.textAnswers[q.id] ?: state.mediaAnswers[q.id]
-        }
-        return combined
     }
 
     private suspend fun persistCurrentAnswers(markComplete: Boolean) {
