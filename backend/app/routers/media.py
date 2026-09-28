@@ -19,7 +19,10 @@ settings = get_settings()
 
 _ALLOWED = {
     "PHOTO": {"image/jpeg", "image/png", "image/webp"},
-    "AUDIO": {"audio/mpeg", "audio/mp4", "audio/aac", "audio/x-m4a", "audio/wav", "audio/ogg"},
+    "AUDIO": {
+        "audio/mpeg", "audio/mp3", "audio/mp4", "audio/aac", "audio/x-m4a", "audio/m4a",
+        "audio/wav", "audio/x-wav", "audio/wave", "audio/ogg", "audio/webm",
+    },
     "SIGNATURE": {"image/png", "image/jpeg"},
 }
 _MAX_BYTES = 25 * 1024 * 1024
@@ -48,7 +51,8 @@ async def upload_media(
         and not can_view_results(current_user, submission.survey)
     ):
         raise HTTPException(status_code=403, detail="Not authorized to upload media for this submission")
-    if file.content_type not in _ALLOWED[kind.value]:
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type not in _ALLOWED[kind.value]:
         raise HTTPException(status_code=415, detail=f"Unsupported {kind.value.lower()} content type")
 
     answer = db.query(SubmissionAnswer).filter(
@@ -90,7 +94,7 @@ async def upload_media(
         kind=kind,
         original_filename=_safe_name(file.filename),
         storage_key=storage_key,
-        content_type=file.content_type,
+        content_type=content_type,
         size_bytes=size,
     )
     db.add(media)
@@ -109,7 +113,11 @@ def get_media(media_id: str, db: Session = Depends(get_db), current_user: User =
     submission = db.query(Submission).filter(Submission.id == media.submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    if submission.submitted_by_id != current_user.id and current_user.role not in (RoleName.ADMINISTRATOR, RoleName.SUPERVISOR):
+    if (
+        submission.submitted_by_id != current_user.id
+        and current_user.role not in (RoleName.ADMINISTRATOR, RoleName.SUPERVISOR)
+        and not can_view_results(current_user, submission.survey)
+    ):
         raise HTTPException(status_code=403, detail="Not authorized to view this media")
     path = Path(settings.MEDIA_ROOT) / media.storage_key
     if not path.is_file():

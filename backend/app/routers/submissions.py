@@ -33,7 +33,13 @@ def _create_submission(db: Session, payload: SubmissionCreate, user: User) -> Su
     if not can_view(user, version.survey):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot submit to this survey")
 
-    answers_by_question_id = {a.question_id: a.value_text for a in payload.answers}
+    # A photo / voice note / signature answer has no text: the captured file
+    # itself (media_reference) is the answer. Count it as answered so required
+    # media questions don't fail server-side validation.
+    answers_by_question_id = {
+        a.question_id: (a.value_text if a.value_text not in (None, "") else a.media_reference)
+        for a in payload.answers
+    }
     issues = validate_submission_answers(version.questions, answers_by_question_id)
     if issues:
         raise HTTPException(
